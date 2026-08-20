@@ -9,10 +9,30 @@ import { io, type Socket } from 'socket.io-client';
 interface AuthBody {
   accessToken: string;
   user: {
+    id: string;
     email: string;
     username: string;
   };
 }
+
+const autonomousGenome = {
+  id: 'autonomous-pilot',
+  nodes: [
+    ...Array.from({ length: 6 }, (_, id) => ({ id, type: 'input', layer: 0 })),
+    { id: 6, type: 'bias', layer: 0 },
+    { id: 7, type: 'output', layer: 1 },
+    { id: 8, type: 'output', layer: 1 },
+  ],
+  connections: [
+    {
+      innovation: 1,
+      source: 6,
+      target: 8,
+      weight: 2,
+      enabled: true,
+    },
+  ],
+};
 
 interface ErrorBody {
   message: string;
@@ -296,6 +316,144 @@ describe('AppController (e2e)', () => {
       socket.disconnect();
     }
   });
+
+  it('runs selected trained genomes in authoritative snapshots', async () => {
+    const [hostRegistration, guestRegistration] = await Promise.all([
+      request(app.getHttpServer()).post('/api/auth/register').send({
+        email: 'race-host@example.com',
+        username: 'race_host',
+        password: 'secure-pass-123',
+      }),
+      request(app.getHttpServer()).post('/api/auth/register').send({
+        email: 'race-guest@example.com',
+        username: 'race_guest',
+        password: 'secure-pass-123',
+      }),
+    ]);
+    expect(hostRegistration.status).toBe(201);
+    expect(guestRegistration.status).toBe(201);
+    const hostBody = hostRegistration.body as AuthBody;
+    const guestBody = guestRegistration.body as AuthBody;
+    const [hostRun, guestRun] = await Promise.all([
+      prisma.trainingRun.create({
+        data: {
+          userId: hostBody.user.id,
+          name: 'Host AI',
+          seed: 1,
+          config: { inputCount: 6, outputCount: 2 },
+          bestGenome: autonomousGenome,
+        },
+      }),
+      prisma.trainingRun.create({
+        data: {
+          userId: guestBody.user.id,
+          name: 'Guest AI',
+          seed: 2,
+          config: { inputCount: 6, outputCount: 2 },
+          bestGenome: autonomousGenome,
+        },
+      }),
+    ]);
+
+    await app.listen(0, '127.0.0.1');
+    const host: Socket = io(`${await app.getUrl()}/multiplayer`, {
+      auth: { token: (hostRegistration.body as AuthBody).accessToken },
+      transports: ['websocket'],
+    });
+    const guest: Socket = io(`${await app.getUrl()}/multiplayer`, {
+      auth: { token: (guestRegistration.body as AuthBody).accessToken },
+      transports: ['websocket'],
+    });
+
+    try {
+      await Promise.all(
+        [host, guest].map(
+          (socket) =>
+            new Promise<void>((resolve, reject) => {
+              socket.once('connection:ready', () => resolve());
+              socket.once('connect_error', reject);
+            }),
+        ),
+      );
+
+      const createdRoom = new Promise<{ code: string }>((resolve) => {
+        host.once('room:state', resolve);
+      });
+      host.emit('room:create', { maxPlayers: 2 });
+      const { code } = await createdRoom;
+
+      const joinedRoom = new Promise<void>((resolve) => {
+        guest.once('room:state', () => resolve());
+      });
+      guest.emit('room:join', { code });
+      await joinedRoom;
+
+      const bothSelected = new Promise<void>((resolve) => {
+        host.on(
+          'room:state',
+          (state: { players: Array<{ genomeName: string | null }> }) => {
+            if (state.players.every((player) => player.genomeName)) resolve();
+          },
+        );
+      });
+      host.emit('player:select-genome', { trainingRunId: hostRun.id });
+      guest.emit('player:select-genome', { trainingRunId: guestRun.id });
+      await bothSelected;
+
+      const bothReady = new Promise<void>((resolve) => {
+        host.on(
+          'room:state',
+          (state: { players: Array<{ ready: boolean }> }) => {
+            if (
+              state.players.length === 2 &&
+              state.players.every((player) => player.ready)
+            ) {
+              resolve();
+            }
+          },
+        );
+      });
+      host.emit('player:ready', { ready: true });
+      guest.emit('player:ready', { ready: true });
+      await bothReady;
+
+      const raceStarted = Promise.all(
+        [host, guest].map(
+          (socket) =>
+            new Promise<void>((resolve) => {
+              socket.once('race:start', () => resolve());
+            }),
+        ),
+      );
+      host.emit('race:start');
+      await raceStarted;
+
+      const movingSnapshot = new Promise<{
+        status: string;
+        players: Array<{ speed: number; z: number }>;
+      }>((resolve) => {
+        host.on(
+          'race:snapshot',
+          (snapshot: {
+            status: string;
+            players: Array<{ speed: number; z: number }>;
+          }) => {
+            if (
+              snapshot.status === 'RACING' &&
+              snapshot.players.every((player) => player.speed > 0)
+            ) {
+              resolve(snapshot);
+            }
+          },
+        );
+      });
+      const snapshot = await movingSnapshot;
+      expect(snapshot.players.every((player) => player.z < 13)).toBe(true);
+    } finally {
+      host.disconnect();
+      guest.disconnect();
+    }
+  }, 15_000);
 
   afterEach(async () => {
     await app.close();

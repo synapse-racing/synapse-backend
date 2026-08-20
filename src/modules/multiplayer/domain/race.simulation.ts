@@ -5,10 +5,12 @@ import {
   RaceSnapshot,
   RoomStatus,
 } from './multiplayer.types';
+import { evaluateNeatGenome, type NeatGenome } from './neat-controller';
 
 interface InternalPlayer extends RacePlayerState {
   input: RaceInput;
   insideCheckpoints: Set<number>;
+  genome?: NeatGenome;
 }
 
 const tickSeconds = 1 / 20;
@@ -29,7 +31,11 @@ export class RaceSimulation {
   private finishedAt: number | null = null;
 
   constructor(
-    competitors: Array<{ userId: string; username: string }>,
+    competitors: Array<{
+      userId: string;
+      username: string;
+      genome?: NeatGenome;
+    }>,
     createdAt = Date.now(),
   ) {
     this.startAt = createdAt + 3000;
@@ -115,6 +121,17 @@ export class RaceSimulation {
   }
 
   private integratePlayer(player: InternalPlayer, now: number): void {
+    if (player.genome) {
+      const [steering, throttle] = evaluateNeatGenome(player.genome, [
+        ...senseTrack(player.x, player.z, player.yaw),
+        Math.min(1, Math.abs(player.speed) / 13),
+      ]);
+      player.input = {
+        sequence: player.input.sequence + 1,
+        steering,
+        throttle,
+      };
+    }
     player.speed += player.input.throttle * 8.5 * tickSeconds;
     player.speed *= Math.pow(0.985, tickSeconds * 60);
     player.speed = Math.max(-4.5, Math.min(12, player.speed));
@@ -197,6 +214,45 @@ export class RaceSimulation {
         rank: player.rank,
       }));
   }
+}
+
+const sensorAngles = [-60, -30, 0, 30, 60].map(
+  (degrees) => (degrees * Math.PI) / 180,
+);
+const boundaries = [
+  [-13.35, -23.35, -13.35, 23.35],
+  [13.35, -23.35, 13.35, 23.35],
+  [-13.35, -23.35, 13.35, -23.35],
+  [-13.35, 23.35, 13.35, 23.35],
+  [-6.65, -16.65, -6.65, 16.65],
+  [6.65, -16.65, 6.65, 16.65],
+  [-6.65, -16.65, 6.65, -16.65],
+  [-6.65, 16.65, 6.65, 16.65],
+] as const;
+
+export function senseTrack(x: number, z: number, yaw: number): number[] {
+  const originX = x - Math.sin(yaw) * 1.25;
+  const originZ = z - Math.cos(yaw) * 1.25;
+  return sensorAngles.map((angle) => {
+    const directionX = -Math.sin(yaw + angle);
+    const directionZ = -Math.cos(yaw + angle);
+    let nearest = 8;
+    for (const [x1, z1, x2, z2] of boundaries) {
+      const segmentX = x2 - x1;
+      const segmentZ = z2 - z1;
+      const denominator = directionX * segmentZ - directionZ * segmentX;
+      if (Math.abs(denominator) < 1e-9) continue;
+      const offsetX = x1 - originX;
+      const offsetZ = z1 - originZ;
+      const distance = (offsetX * segmentZ - offsetZ * segmentX) / denominator;
+      const segmentPosition =
+        (offsetX * directionZ - offsetZ * directionX) / denominator;
+      if (distance >= 0 && segmentPosition >= 0 && segmentPosition <= 1) {
+        nearest = Math.min(nearest, distance);
+      }
+    }
+    return Math.min(1, nearest / 8);
+  });
 }
 
 export function isDrivable(x: number, z: number): boolean {

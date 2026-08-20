@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { RaceSimulation } from '../domain/race.simulation';
+import type { NeatGenome } from '../domain/neat-controller';
 import {
   PublicRoomState,
   RaceInput,
@@ -61,6 +62,8 @@ export class RoomService {
       username: user.username,
       socketId,
       ready: false,
+      genome: null,
+      genomeName: null,
     };
     const room: Room = {
       code,
@@ -95,6 +98,8 @@ export class RoomService {
       username: user.username,
       socketId,
       ready: false,
+      genome: null,
+      genomeName: null,
     };
     room.players.set(user.id, player);
     this.indexPlayer(player, room.code);
@@ -136,7 +141,25 @@ export class RoomService {
     const { room, player } = this.requireMembership(socketId);
     if (room.status !== 'LOBBY')
       throw new RoomError('INVALID_STATE', 'Race is not in lobby');
+    if (ready && !player.genome) {
+      throw new RoomError('GENOME_REQUIRED', 'Select a trained genome first');
+    }
     player.ready = Boolean(ready);
+    return this.publicState(room);
+  }
+
+  selectGenome(
+    socketId: string,
+    genome: NeatGenome,
+    genomeName: string,
+  ): PublicRoomState {
+    const { room, player } = this.requireMembership(socketId);
+    if (room.status !== 'LOBBY') {
+      throw new RoomError('INVALID_STATE', 'Race is not in lobby');
+    }
+    player.genome = genome;
+    player.genomeName = genomeName;
+    player.ready = false;
     return this.publicState(room);
   }
 
@@ -157,11 +180,15 @@ export class RoomService {
     if ([...room.players.values()].some((candidate) => !candidate.ready)) {
       throw new RoomError('NOT_READY', 'Every player must be ready');
     }
+    if ([...room.players.values()].some((candidate) => !candidate.genome)) {
+      throw new RoomError('GENOME_REQUIRED', 'Every player needs a genome');
+    }
 
     room.race = new RaceSimulation(
       [...room.players.values()].map((candidate) => ({
         userId: candidate.userId,
         username: candidate.username,
+        genome: candidate.genome!,
       })),
       now,
     );
@@ -247,6 +274,7 @@ export class RoomService {
         userId: player.userId,
         username: player.username,
         ready: player.ready,
+        genomeName: player.genomeName,
       })),
     };
   }

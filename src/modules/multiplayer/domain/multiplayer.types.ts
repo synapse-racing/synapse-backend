@@ -38,6 +38,8 @@ export interface RoomPlayer {
   username: string;
   socketId: string;
   ready: boolean;
+  genome: NeatGenome | null;
+  genomeName: string | null;
 }
 
 export interface PublicRoomState {
@@ -45,5 +47,8 @@ export interface PublicRoomState {
   hostUserId: string;
   status: RoomStatus;
   maxPlayers: number;
-  players: Array<Pick<RoomPlayer, 'userId' | 'username' | 'ready'>>;
+  players: Array<
+    Pick<RoomPlayer, 'userId' | 'username' | 'ready' | 'genomeName'>
+  >;
 }
+import type { NeatGenome } from './neat-controller';

@@ -1,4 +1,20 @@
 import { RoomError, RoomService } from './room.service';
+import type { NeatGenome } from '../domain/neat-controller';
+
+const genome: NeatGenome = {
+  id: 'pilot',
+  nodes: [
+    ...Array.from({ length: 6 }, (_, id) => ({
+      id,
+      type: 'input' as const,
+      layer: 0,
+    })),
+    { id: 6, type: 'bias', layer: 0 },
+    { id: 7, type: 'output', layer: 1 },
+    { id: 8, type: 'output', layer: 1 },
+  ],
+  connections: [],
+};
 
 function expectRoomError(operation: () => unknown, code: string): void {
   try {
@@ -25,6 +41,8 @@ describe('RoomService', () => {
     expect(joined.players).toHaveLength(2);
     expect(() => service.start('socket-host', 1000)).toThrow(RoomError);
 
+    service.selectGenome('socket-host', genome, 'Host AI');
+    service.selectGenome('socket-guest', genome, 'Guest AI');
     service.setReady('socket-host', true);
     service.setReady('socket-guest', true);
     expectRoomError(() => service.start('socket-guest', 1000), 'HOST_REQUIRED');
