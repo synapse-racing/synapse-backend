@@ -173,10 +173,14 @@ export class TrainingService {
   async raceGenome(userId: string, id: string) {
     const trainingRun = await this.prisma.trainingRun.findFirst({
       where: { id, userId },
-      select: { name: true, bestGenome: true },
+      select: { name: true, bestGenome: true, config: true },
     });
     if (!trainingRun?.bestGenome) {
       throw new NotFoundException('Saved genome is not available');
+    }
+    const config = trainingRun.config as Record<string, unknown>;
+    if (config.simulationVersion !== 'race-sim-v1') {
+      throw new BadRequestException('Training uses an incompatible simulation');
     }
     return trainingRun;
   }

@@ -14,7 +14,7 @@ interface InternalPlayer extends RacePlayerState {
 }
 
 const tickSeconds = 1 / 20;
-const maxRaceMs = 180_000;
+const maxRaceSteps = 28 / tickSeconds;
 const checkpoints = [
   { x: -10, z: 0, halfWidth: 3.7, halfDepth: 0.5 },
   { x: 0, z: -20, halfWidth: 0.5, halfDepth: 3.7 },
@@ -27,8 +27,8 @@ export class RaceSimulation {
   status: RoomStatus = 'COUNTDOWN';
 
   private readonly players = new Map<string, InternalPlayer>();
-  private startedAt: number | null = null;
   private finishedAt: number | null = null;
+  private elapsedSteps = 0;
 
   constructor(
     competitors: Array<{
@@ -51,6 +51,7 @@ export class RaceSimulation {
         laps: 0,
         finishedAt: null,
         disconnected: false,
+        eliminated: false,
         rank: index + 1,
         input: { sequence: -1, steering: 0, throttle: 0 },
         insideCheckpoints: new Set(),
@@ -89,21 +90,20 @@ export class RaceSimulation {
     if (now < this.startAt) return this.snapshot(now);
     if (this.status === 'COUNTDOWN') {
       this.status = 'RACING';
-      this.startedAt = this.startAt;
     }
 
     for (const player of this.players.values()) {
-      if (player.finishedAt || player.disconnected) continue;
-      this.integratePlayer(player, now);
+      if (player.finishedAt || player.disconnected || player.eliminated)
+        continue;
+      player.eliminated = this.integratePlayer(player, now);
     }
+    this.elapsedSteps += 1;
 
     const activePlayers = [...this.players.values()].filter(
-      (player) => !player.finishedAt && !player.disconnected,
+      (player) =>
+        !player.finishedAt && !player.disconnected && !player.eliminated,
     );
-    if (
-      activePlayers.length === 0 ||
-      (this.startedAt !== null && now - this.startedAt >= maxRaceMs)
-    ) {
+    if (activePlayers.length === 0 || this.elapsedSteps >= maxRaceSteps) {
       this.status = 'FINISHED';
       this.finishedAt = now;
     }
@@ -120,7 +120,7 @@ export class RaceSimulation {
     };
   }
 
-  private integratePlayer(player: InternalPlayer, now: number): void {
+  private integratePlayer(player: InternalPlayer, now: number): boolean {
     if (player.genome) {
       const [steering, throttle] = evaluateNeatGenome(player.genome, [
         ...senseTrack(player.x, player.z, player.yaw),
@@ -150,6 +150,7 @@ export class RaceSimulation {
       player.x = previousX;
       player.z = previousZ;
       player.speed *= -0.2;
+      return true;
     }
 
     checkpoints.forEach((checkpoint, index) => {
@@ -171,6 +172,7 @@ export class RaceSimulation {
         }
       }
     });
+    return false;
   }
 
   private updateRanks(): void {
@@ -179,6 +181,7 @@ export class RaceSimulation {
         return left.finishedAt - right.finishedAt;
       if (left.finishedAt) return -1;
       if (right.finishedAt) return 1;
+      if (left.eliminated !== right.eliminated) return left.eliminated ? 1 : -1;
       if (left.laps !== right.laps) return right.laps - left.laps;
       return right.passedCheckpoints - left.passedCheckpoints;
     });
@@ -211,6 +214,7 @@ export class RaceSimulation {
         laps: player.laps,
         finishedAt: player.finishedAt,
         disconnected: player.disconnected,
+        eliminated: player.eliminated,
         rank: player.rank,
       }));
   }
@@ -234,7 +238,7 @@ export function senseTrack(x: number, z: number, yaw: number): number[] {
   const originX = x - Math.sin(yaw) * 1.25;
   const originZ = z - Math.cos(yaw) * 1.25;
   return sensorAngles.map((angle) => {
-    const directionX = -Math.sin(yaw + angle);
+    const directionX = -Math.sin(yaw - angle);
     const directionZ = -Math.cos(yaw + angle);
     let nearest = 8;
     for (const [x1, z1, x2, z2] of boundaries) {
