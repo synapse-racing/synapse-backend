@@ -97,4 +97,23 @@ describe('RaceSimulation', () => {
     expect(snapshot.players[0].eliminated).toBe(true);
     expect(snapshot.players[0].finishedAt).toBeNull();
   });
+
+  it('eliminates an autonomous player after three seconds stopped', () => {
+    const stoppedGenome: NeatGenome = {
+      ...autonomousGenome,
+      id: 'stopped-pilot',
+      connections: [],
+    };
+    const race = new RaceSimulation(
+      [{ userId: 'u1', username: 'driver', genome: stoppedGenome }],
+      1000,
+    );
+    let snapshot = race.tick(race.startAt);
+    for (let step = 1; step < 60; step += 1) {
+      snapshot = race.tick(race.startAt + step * 50);
+    }
+
+    expect(snapshot.status).toBe('FINISHED');
+    expect(snapshot.players[0].eliminationReason).toBe('STALLED');
+  });
 });

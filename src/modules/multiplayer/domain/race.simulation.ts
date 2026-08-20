@@ -11,6 +11,7 @@ interface InternalPlayer extends RacePlayerState {
   input: RaceInput;
   insideCheckpoints: Set<number>;
   genome?: NeatGenome;
+  stationarySteps: number;
 }
 
 const tickSeconds = 1 / 20;
@@ -52,6 +53,8 @@ export class RaceSimulation {
         finishedAt: null,
         disconnected: false,
         eliminated: false,
+        eliminationReason: null,
+        stationarySteps: 0,
         rank: index + 1,
         input: { sequence: -1, steering: 0, throttle: 0 },
         insideCheckpoints: new Set(),
@@ -95,7 +98,13 @@ export class RaceSimulation {
     for (const player of this.players.values()) {
       if (player.finishedAt || player.disconnected || player.eliminated)
         continue;
-      player.eliminated = this.integratePlayer(player, now);
+      const collided = this.integratePlayer(player, now);
+      player.stationarySteps =
+        Math.abs(player.speed) < 0.35 ? player.stationarySteps + 1 : 0;
+      if (collided || player.stationarySteps * tickSeconds >= 3) {
+        player.eliminated = true;
+        player.eliminationReason = collided ? 'COLLISION' : 'STALLED';
+      }
     }
     this.elapsedSteps += 1;
 
@@ -215,6 +224,7 @@ export class RaceSimulation {
         finishedAt: player.finishedAt,
         disconnected: player.disconnected,
         eliminated: player.eliminated,
+        eliminationReason: player.eliminationReason,
         rank: player.rank,
       }));
   }
