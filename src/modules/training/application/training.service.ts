@@ -170,6 +170,17 @@ export class TrainingService {
     };
   }
 
+  async raceGenome(userId: string, id: string) {
+    const trainingRun = await this.prisma.trainingRun.findFirst({
+      where: { id, userId },
+      select: { name: true, bestGenome: true },
+    });
+    if (!trainingRun?.bestGenome) {
+      throw new NotFoundException('Saved genome is not available');
+    }
+    return trainingRun;
+  }
+
   private async requireOwned(userId: string, id: string) {
     const trainingRun = await this.prisma.trainingRun.findFirst({
       where: { id, userId },
