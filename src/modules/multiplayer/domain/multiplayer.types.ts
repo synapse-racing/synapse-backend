@@ -1,4 +1,5 @@
 export type RoomStatus = 'LOBBY' | 'COUNTDOWN' | 'RACING' | 'FINISHED';
+export type EliminationReason = 'COLLISION' | 'STALLED';
 
 export interface RaceInput {
   sequence: number;
@@ -19,6 +20,7 @@ export interface RacePlayerState {
   finishedAt: number | null;
   disconnected: boolean;
   eliminated: boolean;
+  eliminationReason: EliminationReason | null;
   rank: number;
 }
 
