@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String           @id @default(uuid()) @db.Uuid
+  email        String           @unique @db.VarChar(320)
+  username     String           @unique @db.VarChar(32)
+  passwordHash String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  sessions     RefreshSession[]
+  trainingRuns TrainingRun[]
+}
+
+enum TrainingStatus {
+  PAUSED
+  RUNNING
+  COMPLETED
+}
+
+model TrainingRun {
+  id                String               @id @default(uuid()) @db.Uuid
+  userId            String               @db.Uuid
+  name              String               @db.VarChar(80)
+  status            TrainingStatus       @default(PAUSED)
+  seed              Int
+  currentGeneration Int                  @default(0)
+  bestFitness       Float                @default(0)
+  config             Json
+  bestGenome         Json?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkpoints        TrainingCheckpoint[]
+  metrics            GenerationMetric[]
+
+  @@index([userId, updatedAt])
+}
+
+model TrainingCheckpoint {
+  id            String      @id @default(uuid()) @db.Uuid
+  trainingRunId String      @db.Uuid
+  generation    Int
+  snapshot      Json
+  createdAt     DateTime    @default(now())
+  trainingRun   TrainingRun @relation(fields: [trainingRunId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingRunId, generation])
+}
+
+model GenerationMetric {
+  id              String      @id @default(uuid()) @db.Uuid
+  trainingRunId   String      @db.Uuid
+  generation      Int
+  bestFitness     Float
+  averageFitness  Float
+  speciesCount    Int
+  durationMs      Int
+  createdAt       DateTime    @default(now())
+  trainingRun     TrainingRun @relation(fields: [trainingRunId], references: [id], onDelete: Cascade)
+
+  @@unique([trainingRunId, generation])
+  @@index([trainingRunId, generation])
+}
+
+model RefreshSession {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
