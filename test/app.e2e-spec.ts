@@ -251,6 +251,35 @@ describe('AppController (e2e)', () => {
         expect(response.body as unknown[]).toHaveLength(1);
       });
 
+    const regeneratedTrack = { version: 'curved-loop-v1', seed: 987654 };
+    await request(server)
+      .patch(`/api/training-runs/${trainingRun.id}/track`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ track: regeneratedTrack })
+      .expect(200)
+      .expect((response) => {
+        const body = response.body as TrainingRunBody & {
+          config: { track: unknown };
+        };
+        expect(body.config.track).toEqual(regeneratedTrack);
+        expect(body.bestFitness).toBe(0);
+      });
+    await request(server)
+      .get(`/api/training-runs/${trainingRun.id}/checkpoints/latest`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200)
+      .expect((response) => {
+        const body = response.body as {
+          snapshot: { config: { track: unknown } };
+        };
+        expect(body.snapshot.config.track).toEqual(regeneratedTrack);
+      });
+    await request(server)
+      .get(`/api/training-runs/${trainingRun.id}/metrics`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .expect(200)
+      .expect([]);
+
     const otherRegistration = await request(server)
       .post('/api/auth/register')
       .send({

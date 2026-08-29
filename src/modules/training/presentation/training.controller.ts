@@ -27,6 +27,7 @@ import { TrainingService } from '../application/training.service';
 import { CreateTrainingRunDto } from './dto/create-training-run.dto';
 import { SaveCheckpointDto } from './dto/save-checkpoint.dto';
 import { UpdateTrainingStatusDto } from './dto/update-training-status.dto';
+import { UpdateTrainingTrackDto } from './dto/update-training-track.dto';
 
 @ApiTags('training-runs')
 @ApiBearerAuth()
@@ -64,6 +65,16 @@ export class TrainingController {
     @Body() input: UpdateTrainingStatusDto,
   ) {
     return this.trainingService.updateStatus(user.id, id, input.status);
+  }
+
+  @Patch(':id/track')
+  @ApiOperation({ summary: 'Regenerate the active training track' })
+  updateTrack(
+    @CurrentUser() user: PublicUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() input: UpdateTrainingTrackDto,
+  ) {
+    return this.trainingService.updateTrack(user.id, id, input.track);
   }
 
   @Delete(':id')

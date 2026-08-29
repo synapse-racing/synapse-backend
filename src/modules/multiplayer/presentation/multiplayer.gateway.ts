@@ -217,6 +217,7 @@ export class MultiplayerGateway
         client.id,
         genome,
         selected.name,
+        selected.track,
       );
       this.server.to(this.roomName(state.code)).emit('room:state', state);
     });

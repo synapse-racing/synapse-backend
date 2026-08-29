@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { RaceSimulation } from '../domain/race.simulation';
 import type { NeatGenome } from '../domain/neat-controller';
+import { generateTrack, type TrackRecipe } from '../domain/track';
 import {
   PublicRoomState,
   RaceInput,
@@ -64,6 +65,7 @@ export class RoomService {
       ready: false,
       genome: null,
       genomeName: null,
+      track: null,
     };
     const room: Room = {
       code,
@@ -100,6 +102,7 @@ export class RoomService {
       ready: false,
       genome: null,
       genomeName: null,
+      track: null,
     };
     room.players.set(user.id, player);
     this.indexPlayer(player, room.code);
@@ -152,6 +155,7 @@ export class RoomService {
     socketId: string,
     genome: NeatGenome,
     genomeName: string,
+    track: TrackRecipe,
   ): PublicRoomState {
     const { room, player } = this.requireMembership(socketId);
     if (room.status !== 'LOBBY') {
@@ -159,6 +163,7 @@ export class RoomService {
     }
     player.genome = genome;
     player.genomeName = genomeName;
+    player.track = track;
     player.ready = false;
     return this.publicState(room);
   }
@@ -180,17 +185,35 @@ export class RoomService {
     if ([...room.players.values()].some((candidate) => !candidate.ready)) {
       throw new RoomError('NOT_READY', 'Every player must be ready');
     }
-    if ([...room.players.values()].some((candidate) => !candidate.genome)) {
+    const players = [...room.players.values()];
+    if (players.some((candidate) => !candidate.genome)) {
       throw new RoomError('GENOME_REQUIRED', 'Every player needs a genome');
+    }
+    const track = players[0].track;
+    if (!track || players.some((candidate) => !candidate.track)) {
+      throw new RoomError('TRACK_REQUIRED', 'Every genome needs a track');
+    }
+    if (
+      players.some(
+        (candidate) =>
+          candidate.track?.seed !== track.seed ||
+          candidate.track.version !== track.version,
+      )
+    ) {
+      throw new RoomError(
+        'TRACK_MISMATCH',
+        'Every genome must use the same track',
+      );
     }
 
     room.race = new RaceSimulation(
-      [...room.players.values()].map((candidate) => ({
+      players.map((candidate) => ({
         userId: candidate.userId,
         username: candidate.username,
         genome: candidate.genome!,
       })),
       now,
+      generateTrack(track),
     );
     room.status = 'COUNTDOWN';
     return { state: this.publicState(room), startAt: room.race.startAt };
@@ -270,6 +293,9 @@ export class RoomService {
       hostUserId: room.hostUserId,
       status: room.status,
       maxPlayers: room.maxPlayers,
+      track:
+        [...room.players.values()].find((player) => player.track)?.track ??
+        null,
       players: [...room.players.values()].map((player) => ({
         userId: player.userId,
         username: player.username,

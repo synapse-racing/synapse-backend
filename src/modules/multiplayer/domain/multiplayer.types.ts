@@ -1,3 +1,6 @@
+import type { NeatGenome } from './neat-controller';
+import type { TrackRecipe } from './track';
+
 export type RoomStatus = 'LOBBY' | 'COUNTDOWN' | 'RACING' | 'FINISHED';
 export type EliminationReason = 'COLLISION' | 'STALLED';
 
@@ -43,6 +46,7 @@ export interface RoomPlayer {
   ready: boolean;
   genome: NeatGenome | null;
   genomeName: string | null;
+  track: TrackRecipe | null;
 }
 
 export interface PublicRoomState {
@@ -50,8 +54,8 @@ export interface PublicRoomState {
   hostUserId: string;
   status: RoomStatus;
   maxPlayers: number;
+  track: TrackRecipe | null;
   players: Array<
     Pick<RoomPlayer, 'userId' | 'username' | 'ready' | 'genomeName'>
   >;
 }
-import type { NeatGenome } from './neat-controller';

@@ -1,5 +1,6 @@
 import { RoomError, RoomService } from './room.service';
 import type { NeatGenome } from '../domain/neat-controller';
+import { prototypeTrackRecipe } from '../domain/track';
 
 const genome: NeatGenome = {
   id: 'pilot',
@@ -41,8 +42,18 @@ describe('RoomService', () => {
     expect(joined.players).toHaveLength(2);
     expect(() => service.start('socket-host', 1000)).toThrow(RoomError);
 
-    service.selectGenome('socket-host', genome, 'Host AI');
-    service.selectGenome('socket-guest', genome, 'Guest AI');
+    service.selectGenome(
+      'socket-host',
+      genome,
+      'Host AI',
+      prototypeTrackRecipe,
+    );
+    service.selectGenome(
+      'socket-guest',
+      genome,
+      'Guest AI',
+      prototypeTrackRecipe,
+    );
     service.setReady('socket-host', true);
     service.setReady('socket-guest', true);
     expectRoomError(() => service.start('socket-guest', 1000), 'HOST_REQUIRED');
@@ -50,6 +61,35 @@ describe('RoomService', () => {
     const started = service.start('socket-host', 1000);
     expect(started.state.status).toBe('COUNTDOWN');
     expect(started.startAt).toBe(4000);
+    expect(started.state.track).toEqual(prototypeTrackRecipe);
+  });
+
+  it('rejects genomes trained on different tracks', () => {
+    const service = new RoomService();
+    const created = service.create(
+      { id: 'host', username: 'Host' },
+      'socket-host',
+      2,
+    );
+    service.join(
+      created.code,
+      { id: 'guest', username: 'Guest' },
+      'socket-guest',
+    );
+    service.selectGenome(
+      'socket-host',
+      genome,
+      'Host AI',
+      prototypeTrackRecipe,
+    );
+    service.selectGenome('socket-guest', genome, 'Guest AI', {
+      ...prototypeTrackRecipe,
+      seed: 7,
+    });
+    service.setReady('socket-host', true);
+    service.setReady('socket-guest', true);
+
+    expectRoomError(() => service.start('socket-host'), 'TRACK_MISMATCH');
   });
 
   it('transfers host and prevents joining multiple rooms', () => {

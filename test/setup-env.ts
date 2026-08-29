@@ -1,7 +1,7 @@
 process.env.NODE_ENV = 'test';
 process.env.FRONTEND_URL = 'http://localhost:5173';
 process.env.DATABASE_URL =
-  'postgresql://synapse:synapse@localhost:5432/synapse?schema=public';
+  'postgresql://synapse:synapse@localhost:5432/synapse_test?schema=public';
 process.env.JWT_ACCESS_SECRET =
   'test-access-secret-with-at-least-32-characters';
 process.env.JWT_REFRESH_SECRET =
