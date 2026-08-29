@@ -6,6 +6,7 @@ import {
   RoomStatus,
 } from './multiplayer.types';
 import { evaluateNeatGenome, type NeatGenome } from './neat-controller';
+import { generateTrack, prototypeTrackRecipe, type RaceTrack } from './track';
 
 interface InternalPlayer extends RacePlayerState {
   input: RaceInput;
@@ -16,12 +17,6 @@ interface InternalPlayer extends RacePlayerState {
 
 const tickSeconds = 1 / 20;
 const maxRaceSteps = 28 / tickSeconds;
-const checkpoints = [
-  { x: -10, z: 0, halfWidth: 3.7, halfDepth: 0.5 },
-  { x: 0, z: -20, halfWidth: 0.5, halfDepth: 3.7 },
-  { x: 10, z: 0, halfWidth: 3.7, halfDepth: 0.5 },
-  { x: 0, z: 20, halfWidth: 0.5, halfDepth: 3.7 },
-];
 
 export class RaceSimulation {
   readonly startAt: number;
@@ -38,14 +33,15 @@ export class RaceSimulation {
       genome?: NeatGenome;
     }>,
     createdAt = Date.now(),
+    private readonly track: RaceTrack = generateTrack(prototypeTrackRecipe),
   ) {
     this.startAt = createdAt + 3000;
     competitors.forEach((competitor, index) => {
       this.players.set(competitor.userId, {
         ...competitor,
-        x: -10 + (index % 2) * 1.4,
-        z: 13 + Math.floor(index / 2) * 1.6,
-        yaw: 0,
+        x: track.spawn.x,
+        z: track.spawn.z,
+        yaw: track.spawn.yaw,
         speed: 0,
         expectedCheckpoint: 0,
         passedCheckpoints: 0,
@@ -132,7 +128,7 @@ export class RaceSimulation {
   private integratePlayer(player: InternalPlayer, now: number): boolean {
     if (player.genome) {
       const [steering, throttle] = evaluateNeatGenome(player.genome, [
-        ...senseTrack(player.x, player.z, player.yaw),
+        ...senseTrack(player.x, player.z, player.yaw, this.track),
         Math.min(1, Math.abs(player.speed) / 13),
       ]);
       player.input = {
@@ -155,24 +151,30 @@ export class RaceSimulation {
     player.x += -Math.sin(player.yaw) * player.speed * tickSeconds;
     player.z += -Math.cos(player.yaw) * player.speed * tickSeconds;
 
-    if (!isDrivable(player.x, player.z)) {
+    if (!isDrivable(player.x, player.z, this.track)) {
       player.x = previousX;
       player.z = previousZ;
       player.speed *= -0.2;
       return true;
     }
 
-    checkpoints.forEach((checkpoint, index) => {
+    this.track.checkpoints.forEach((checkpoint, index) => {
+      const dx = player.x - checkpoint.x;
+      const dz = player.z - checkpoint.z;
+      const cosine = Math.cos(checkpoint.yaw);
+      const sine = Math.sin(checkpoint.yaw);
+      const localX = cosine * dx - sine * dz;
+      const localZ = sine * dx + cosine * dz;
       const inside =
-        Math.abs(player.x - checkpoint.x) <= checkpoint.halfWidth &&
-        Math.abs(player.z - checkpoint.z) <= checkpoint.halfDepth;
+        Math.abs(localX) <= checkpoint.halfWidth &&
+        Math.abs(localZ) <= checkpoint.halfDepth;
       const wasInside = player.insideCheckpoints.has(index);
       if (inside) player.insideCheckpoints.add(index);
       else player.insideCheckpoints.delete(index);
 
       if (inside && !wasInside && index === player.expectedCheckpoint) {
         player.passedCheckpoints += 1;
-        if (index === checkpoints.length - 1) {
+        if (index === this.track.checkpoints.length - 1) {
           player.laps += 1;
           player.expectedCheckpoint = 0;
           player.finishedAt = now;
@@ -233,25 +235,19 @@ export class RaceSimulation {
 const sensorAngles = [-60, -30, 0, 30, 60].map(
   (degrees) => (degrees * Math.PI) / 180,
 );
-const boundaries = [
-  [-13.35, -23.35, -13.35, 23.35],
-  [13.35, -23.35, 13.35, 23.35],
-  [-13.35, -23.35, 13.35, -23.35],
-  [-13.35, 23.35, 13.35, 23.35],
-  [-6.65, -16.65, -6.65, 16.65],
-  [6.65, -16.65, 6.65, 16.65],
-  [-6.65, -16.65, 6.65, -16.65],
-  [-6.65, 16.65, 6.65, 16.65],
-] as const;
-
-export function senseTrack(x: number, z: number, yaw: number): number[] {
+export function senseTrack(
+  x: number,
+  z: number,
+  yaw: number,
+  track: RaceTrack = generateTrack(prototypeTrackRecipe),
+): number[] {
   const originX = x - Math.sin(yaw) * 1.25;
   const originZ = z - Math.cos(yaw) * 1.25;
   return sensorAngles.map((angle) => {
     const directionX = -Math.sin(yaw - angle);
-    const directionZ = -Math.cos(yaw + angle);
+    const directionZ = -Math.cos(yaw - angle);
     let nearest = 8;
-    for (const [x1, z1, x2, z2] of boundaries) {
+    for (const [x1, z1, x2, z2] of track.boundaries) {
       const segmentX = x2 - x1;
       const segmentZ = z2 - z1;
       const denominator = directionX * segmentZ - directionZ * segmentX;
@@ -269,8 +265,35 @@ export function senseTrack(x: number, z: number, yaw: number): number[] {
   });
 }
 
-export function isDrivable(x: number, z: number): boolean {
-  const insideOuter = Math.abs(x) < 13.35 && Math.abs(z) < 23.35;
-  const outsideIsland = Math.abs(x) > 6.65 || Math.abs(z) > 16.65;
-  return insideOuter && outsideIsland;
+export function isDrivable(
+  x: number,
+  z: number,
+  track: RaceTrack = generateTrack(prototypeTrackRecipe),
+): boolean {
+  if (track.geometry.kind === 'rectangular-ring') {
+    const { outerX, outerZ, innerX, innerZ } = track.geometry;
+    const insideOuter = Math.abs(x) < outerX && Math.abs(z) < outerZ;
+    const outsideIsland = Math.abs(x) > innerX || Math.abs(z) > innerZ;
+    return insideOuter && outsideIsland;
+  }
+  const { centerline, driveHalfWidth } = track.geometry;
+  return centerline.some((start, index) => {
+    const end = centerline[(index + 1) % centerline.length];
+    const segmentX = end[0] - start[0];
+    const segmentZ = end[1] - start[1];
+    const lengthSquared = segmentX * segmentX + segmentZ * segmentZ;
+    const projection = Math.max(
+      0,
+      Math.min(
+        1,
+        ((x - start[0]) * segmentX + (z - start[1]) * segmentZ) / lengthSquared,
+      ),
+    );
+    return (
+      Math.hypot(
+        x - (start[0] + segmentX * projection),
+        z - (start[1] + segmentZ * projection),
+      ) < driveHalfWidth
+    );
+  });
 }

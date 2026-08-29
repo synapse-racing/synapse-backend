@@ -7,6 +7,8 @@ import { Prisma, TrainingStatus } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { CreateTrainingRunDto } from '../presentation/dto/create-training-run.dto';
 import { SaveCheckpointDto } from '../presentation/dto/save-checkpoint.dto';
+import { parseTrackRecipe } from '../../multiplayer/domain/track';
+import type { TrackRecipe } from '../../multiplayer/domain/track';
 
 const trainingSummarySelect = {
   id: true,
@@ -69,6 +71,52 @@ export class TrainingService {
         finishedAt: status === TrainingStatus.COMPLETED ? now : null,
       },
       select: trainingSummarySelect,
+    });
+  }
+
+  async updateTrack(userId: string, id: string, trackInput: TrackRecipe) {
+    const track = parseTrackRecipe(trackInput);
+    const trackJson = { version: track.version, seed: track.seed };
+    return this.prisma.$transaction(async (transaction) => {
+      const trainingRun = await transaction.trainingRun.findFirst({
+        where: { id, userId },
+      });
+      if (!trainingRun) throw new NotFoundException('Training run not found');
+
+      const config = trainingRun.config as Record<string, unknown>;
+      const checkpoint = await transaction.trainingCheckpoint.findFirst({
+        where: { trainingRunId: id },
+        orderBy: { generation: 'desc' },
+      });
+      if (checkpoint) {
+        const snapshot = checkpoint.snapshot as Record<string, unknown>;
+        const snapshotConfig = snapshot.config as Record<string, unknown>;
+        await transaction.trainingCheckpoint.update({
+          where: { id: checkpoint.id },
+          data: {
+            snapshot: {
+              ...snapshot,
+              config: { ...snapshotConfig, track: trackJson },
+            },
+          },
+        });
+      }
+      await transaction.generationMetric.deleteMany({
+        where: { trainingRunId: id },
+      });
+      return transaction.trainingRun.update({
+        where: { id },
+        data: {
+          config: {
+            ...config,
+            track: trackJson,
+          },
+          status: TrainingStatus.PAUSED,
+          bestFitness: 0,
+          bestGenome: Prisma.DbNull,
+        },
+        select: trainingSummarySelect,
+      });
     });
   }
 
@@ -182,7 +230,11 @@ export class TrainingService {
     if (config.simulationVersion !== 'race-sim-v1') {
       throw new BadRequestException('Training uses an incompatible simulation');
     }
-    return trainingRun;
+    try {
+      return { ...trainingRun, track: parseTrackRecipe(config.track) };
+    } catch {
+      throw new BadRequestException('Training uses an invalid track');
+    }
   }
 
   private async requireOwned(userId: string, id: string) {

@@ -1,5 +1,6 @@
 import { RaceSimulation, isDrivable, senseTrack } from './race.simulation';
 import type { NeatGenome } from './neat-controller';
+import { generateTrack } from './track';
 
 const autonomousGenome: NeatGenome = {
   id: 'golden-pilot',
@@ -23,6 +24,36 @@ describe('RaceSimulation', () => {
     expect(isDrivable(-10, 0)).toBe(true);
     expect(isDrivable(0, 0)).toBe(false);
     expect(isDrivable(14, 0)).toBe(false);
+  });
+
+  it('uses generated geometry and spawn coordinates', () => {
+    const track = generateTrack({ version: 'curved-loop-v1', seed: 7 });
+    const race = new RaceSimulation(
+      [{ userId: 'u1', username: 'driver' }],
+      1000,
+      track,
+    );
+    const player = race.tick(race.startAt - 1).players[0];
+
+    expect({ x: player.x, z: player.z, yaw: player.yaw }).toEqual(track.spawn);
+    expect(isDrivable(track.spawn.x, track.spawn.z, track)).toBe(true);
+    expect(isDrivable(0, 0, track)).toBe(false);
+  });
+
+  it('starts every genome from the same pose used in training', () => {
+    const race = new RaceSimulation(
+      [
+        { userId: 'u1', username: 'first' },
+        { userId: 'u2', username: 'second' },
+      ],
+      1000,
+    );
+    const snapshot = race.tick(race.startAt - 1);
+
+    expect(snapshot.players.map(({ x, z, yaw }) => ({ x, z, yaw }))).toEqual([
+      { x: -10, z: 13, yaw: 0 },
+      { x: -10, z: 13, yaw: 0 },
+    ]);
   });
 
   it('ignores stale inputs and advances ordered checkpoints', () => {
