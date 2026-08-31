@@ -230,11 +230,7 @@ export class TrainingService {
     if (config.simulationVersion !== 'race-sim-v1') {
       throw new BadRequestException('Training uses an incompatible simulation');
     }
-    try {
-      return { ...trainingRun, track: parseTrackRecipe(config.track) };
-    } catch {
-      throw new BadRequestException('Training uses an invalid track');
-    }
+    return trainingRun;
   }
 
   private async requireOwned(userId: string, id: string) {

@@ -373,6 +373,7 @@ describe('AppController (e2e)', () => {
             inputCount: 6,
             outputCount: 2,
             simulationVersion: 'race-sim-v1',
+            track: { version: 'curved-loop-v1', seed: 11 },
           },
           bestGenome: autonomousGenome,
         },
@@ -386,6 +387,7 @@ describe('AppController (e2e)', () => {
             inputCount: 6,
             outputCount: 2,
             simulationVersion: 'race-sim-v1',
+            track: { version: 'curved-loop-v1', seed: 22 },
           },
           bestGenome: autonomousGenome,
         },
@@ -424,6 +426,17 @@ describe('AppController (e2e)', () => {
       });
       guest.emit('room:join', { code });
       await joinedRoom;
+
+      const selectedTrack = new Promise<void>((resolve) => {
+        host.once('room:state', (state: { track: { seed: number } }) => {
+          expect(state.track.seed).toBe(777);
+          resolve();
+        });
+      });
+      host.emit('room:select-track', {
+        track: { version: 'curved-loop-v1', seed: 777 },
+      });
+      await selectedTrack;
 
       const bothSelected = new Promise<void>((resolve) => {
         host.on(

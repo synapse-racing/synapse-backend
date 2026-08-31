@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { RaceSimulation } from '../domain/race.simulation';
 import type { NeatGenome } from '../domain/neat-controller';
-import { generateTrack, type TrackRecipe } from '../domain/track';
+import {
+  generateTrack,
+  parseTrackRecipe,
+  type TrackRecipe,
+} from '../domain/track';
 import {
   PublicRoomState,
   RaceInput,
@@ -17,6 +21,7 @@ interface Room {
   hostUserId: string;
   status: RoomStatus;
   maxPlayers: number;
+  track: TrackRecipe;
   players: Map<string, RoomPlayer>;
   race?: RaceSimulation;
   finishBroadcasted: boolean;
@@ -65,13 +70,13 @@ export class RoomService {
       ready: false,
       genome: null,
       genomeName: null,
-      track: null,
     };
     const room: Room = {
       code,
       hostUserId: user.id,
       status: 'LOBBY',
       maxPlayers,
+      track: this.createTrackRecipe(),
       players: new Map([[user.id, player]]),
       finishBroadcasted: false,
     };
@@ -102,7 +107,6 @@ export class RoomService {
       ready: false,
       genome: null,
       genomeName: null,
-      track: null,
     };
     room.players.set(user.id, player);
     this.indexPlayer(player, room.code);
@@ -155,7 +159,6 @@ export class RoomService {
     socketId: string,
     genome: NeatGenome,
     genomeName: string,
-    track: TrackRecipe,
   ): PublicRoomState {
     const { room, player } = this.requireMembership(socketId);
     if (room.status !== 'LOBBY') {
@@ -163,8 +166,23 @@ export class RoomService {
     }
     player.genome = genome;
     player.genomeName = genomeName;
-    player.track = track;
     player.ready = false;
+    return this.publicState(room);
+  }
+
+  selectTrack(socketId: string, trackInput: TrackRecipe): PublicRoomState {
+    const { room, player } = this.requireMembership(socketId);
+    if (room.status !== 'LOBBY') {
+      throw new RoomError('INVALID_STATE', 'Race is not in lobby');
+    }
+    if (room.hostUserId !== player.userId) {
+      throw new RoomError(
+        'HOST_REQUIRED',
+        'Only the host can select the track',
+      );
+    }
+    room.track = parseTrackRecipe(trackInput);
+    for (const candidate of room.players.values()) candidate.ready = false;
     return this.publicState(room);
   }
 
@@ -189,23 +207,6 @@ export class RoomService {
     if (players.some((candidate) => !candidate.genome)) {
       throw new RoomError('GENOME_REQUIRED', 'Every player needs a genome');
     }
-    const track = players[0].track;
-    if (!track || players.some((candidate) => !candidate.track)) {
-      throw new RoomError('TRACK_REQUIRED', 'Every genome needs a track');
-    }
-    if (
-      players.some(
-        (candidate) =>
-          candidate.track?.seed !== track.seed ||
-          candidate.track.version !== track.version,
-      )
-    ) {
-      throw new RoomError(
-        'TRACK_MISMATCH',
-        'Every genome must use the same track',
-      );
-    }
-
     room.race = new RaceSimulation(
       players.map((candidate) => ({
         userId: candidate.userId,
@@ -213,7 +214,7 @@ export class RoomService {
         genome: candidate.genome!,
       })),
       now,
-      generateTrack(track),
+      generateTrack(room.track),
     );
     room.status = 'COUNTDOWN';
     return { state: this.publicState(room), startAt: room.race.startAt };
@@ -287,15 +288,20 @@ export class RoomService {
     return code;
   }
 
+  private createTrackRecipe(): TrackRecipe {
+    return {
+      version: 'curved-loop-v1',
+      seed: randomBytes(4).readUInt32LE() & 0x7fffffff,
+    };
+  }
+
   private publicState(room: Room): PublicRoomState {
     return {
       code: room.code,
       hostUserId: room.hostUserId,
       status: room.status,
       maxPlayers: room.maxPlayers,
-      track:
-        [...room.players.values()].find((player) => player.track)?.track ??
-        null,
+      track: room.track,
       players: [...room.players.values()].map((player) => ({
         userId: player.userId,
         username: player.username,
