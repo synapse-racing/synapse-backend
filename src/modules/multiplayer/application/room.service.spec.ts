@@ -1,6 +1,7 @@
 import { RoomError, RoomService } from './room.service';
 import type { NeatGenome } from '../domain/neat-controller';
-import { prototypeTrackRecipe } from '../domain/track';
+
+const multiplayerTrack = { version: 'curved-loop-v1' as const, seed: 99 };
 
 const genome: NeatGenome = {
   id: 'pilot',
@@ -42,18 +43,9 @@ describe('RoomService', () => {
     expect(joined.players).toHaveLength(2);
     expect(() => service.start('socket-host', 1000)).toThrow(RoomError);
 
-    service.selectGenome(
-      'socket-host',
-      genome,
-      'Host AI',
-      prototypeTrackRecipe,
-    );
-    service.selectGenome(
-      'socket-guest',
-      genome,
-      'Guest AI',
-      prototypeTrackRecipe,
-    );
+    service.selectTrack('socket-host', multiplayerTrack);
+    service.selectGenome('socket-host', genome, 'Host AI');
+    service.selectGenome('socket-guest', genome, 'Guest AI');
     service.setReady('socket-host', true);
     service.setReady('socket-guest', true);
     expectRoomError(() => service.start('socket-guest', 1000), 'HOST_REQUIRED');
@@ -61,10 +53,10 @@ describe('RoomService', () => {
     const started = service.start('socket-host', 1000);
     expect(started.state.status).toBe('COUNTDOWN');
     expect(started.startAt).toBe(4000);
-    expect(started.state.track).toEqual(prototypeTrackRecipe);
+    expect(started.state.track).toEqual(multiplayerTrack);
   });
 
-  it('rejects genomes trained on different tracks', () => {
+  it('lets the host choose a track independently from selected genomes', () => {
     const service = new RoomService();
     const created = service.create(
       { id: 'host', username: 'Host' },
@@ -76,20 +68,22 @@ describe('RoomService', () => {
       { id: 'guest', username: 'Guest' },
       'socket-guest',
     );
-    service.selectGenome(
-      'socket-host',
-      genome,
-      'Host AI',
-      prototypeTrackRecipe,
-    );
-    service.selectGenome('socket-guest', genome, 'Guest AI', {
-      ...prototypeTrackRecipe,
-      seed: 7,
-    });
+    service.selectGenome('socket-host', genome, 'Host AI');
+    service.selectGenome('socket-guest', genome, 'Guest AI');
     service.setReady('socket-host', true);
     service.setReady('socket-guest', true);
 
-    expectRoomError(() => service.start('socket-host'), 'TRACK_MISMATCH');
+    expectRoomError(
+      () => service.selectTrack('socket-guest', multiplayerTrack),
+      'HOST_REQUIRED',
+    );
+    const selected = service.selectTrack('socket-host', multiplayerTrack);
+    expect(selected.track).toEqual(multiplayerTrack);
+    expect(selected.players.every((player) => !player.ready)).toBe(true);
+
+    service.setReady('socket-host', true);
+    service.setReady('socket-guest', true);
+    expect(service.start('socket-host').state.status).toBe('COUNTDOWN');
   });
 
   it('transfers host and prevents joining multiple rooms', () => {
