@@ -46,7 +46,6 @@ export interface RoomPlayer {
   ready: boolean;
   genome: NeatGenome | null;
   genomeName: string | null;
-  track: TrackRecipe | null;
 }
 
 export interface PublicRoomState {
@@ -54,7 +53,7 @@ export interface PublicRoomState {
   hostUserId: string;
   status: RoomStatus;
   maxPlayers: number;
-  track: TrackRecipe | null;
+  track: TrackRecipe;
   players: Array<
     Pick<RoomPlayer, 'userId' | 'username' | 'ready' | 'genomeName'>
   >;
