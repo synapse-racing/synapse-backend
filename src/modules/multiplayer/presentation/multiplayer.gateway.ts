@@ -32,6 +32,8 @@ import { RaceInputDto } from './dto/race-input.dto';
 import { ReadyDto } from './dto/ready.dto';
 import { SelectGenomeDto } from './dto/select-genome.dto';
 import { parseNeatGenome, type NeatGenome } from '../domain/neat-controller';
+import { parseTrackRecipe } from '../domain/track';
+import { SelectTrackDto } from './dto/select-track.dto';
 
 interface MultiplayerSocketData {
   user?: PublicUser;
@@ -43,6 +45,7 @@ interface ClientToServerEvents {
   'room:leave': () => void;
   'player:ready': (input: ReadyDto) => void;
   'player:select-genome': (input: SelectGenomeDto) => void;
+  'room:select-track': (input: SelectTrackDto) => void;
   'race:start': () => void;
   'race:input': (input: RaceInput) => void;
 }
@@ -217,7 +220,20 @@ export class MultiplayerGateway
         client.id,
         genome,
         selected.name,
-        selected.track,
+      );
+      this.server.to(this.roomName(state.code)).emit('room:state', state);
+    });
+  }
+
+  @SubscribeMessage('room:select-track')
+  selectTrack(
+    @ConnectedSocket() client: MultiplayerSocket,
+    @MessageBody() input: SelectTrackDto,
+  ): void {
+    this.execute(client, () => {
+      const state = this.roomService.selectTrack(
+        client.id,
+        parseTrackRecipe(input.track),
       );
       this.server.to(this.roomName(state.code)).emit('room:state', state);
     });
