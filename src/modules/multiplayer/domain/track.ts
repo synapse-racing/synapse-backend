@@ -1,5 +1,5 @@
 export interface TrackRecipe {
-  version: 'rectangular-ring-v1' | 'curved-loop-v1';
+  version: 'rectangular-ring-v1' | 'curved-loop-v1' | 'technical-loop-v2';
   seed: number;
 }
 
@@ -51,7 +51,8 @@ export function parseTrackRecipe(value: unknown): TrackRecipe {
   const recipe = value as Record<string, unknown>;
   if (
     (recipe.version !== 'rectangular-ring-v1' &&
-      recipe.version !== 'curved-loop-v1') ||
+      recipe.version !== 'curved-loop-v1' &&
+      recipe.version !== 'technical-loop-v2') ||
     !Number.isSafeInteger(recipe.seed) ||
     (recipe.seed as number) < 0 ||
     (recipe.seed as number) > 2_147_483_647
@@ -63,23 +64,31 @@ export function parseTrackRecipe(value: unknown): TrackRecipe {
 
 function generateCurvedTrack(recipe: TrackRecipe): RaceTrack {
   const random = randomValues(recipe.seed);
-  const radiusX = halfStep(random, 14, 19);
-  const radiusZ = halfStep(random, 17, 24);
+  const technical = recipe.version === 'technical-loop-v2';
+  const radiusX = technical
+    ? halfStep(random, 50, 65)
+    : halfStep(random, 14, 19);
+  const radiusZ = halfStep(random, technical ? 60 : 17, technical ? 75 : 24);
   const driveHalfWidth = halfStep(random, 3.25, 4.25);
   const waveTwo = 0.06 + random() * 0.08;
   const waveThree = 0.04 + random() * 0.07;
   const phaseTwo = random() * Math.PI * 2;
   const phaseThree = random() * Math.PI * 2;
-  const sampleCount = 72;
+  const harmonic = technical ? 4 + Math.floor(random() * 3) : 0;
+  const wave = technical ? 0.09 + random() * 0.035 : 0;
+  const phase = technical ? random() * Math.PI * 2 : 0;
+  let scale = 1;
+  const sampleCount = technical ? 240 : 72;
 
   const pointAt = (angle: number): readonly [number, number] => {
     const radius =
       1 +
       waveTwo * Math.sin(angle * 2 + phaseTwo) +
-      waveThree * Math.sin(angle * 3 + phaseThree);
+      waveThree * Math.sin(angle * 3 + phaseThree) +
+      wave * Math.sin(angle * harmonic + phase);
     return [
-      radiusX * radius * Math.cos(angle),
-      radiusZ * radius * Math.sin(angle),
+      scale * radiusX * radius * Math.cos(angle),
+      scale * radiusZ * radius * Math.sin(angle),
     ];
   };
   const tangentAt = (angle: number): readonly [number, number] => {
@@ -90,6 +99,26 @@ function generateCurvedTrack(recipe: TrackRecipe): RaceTrack {
     const length = Math.hypot(dx, dz);
     return [dx / length, dz / length];
   };
+  // Keep tight bends wide enough for the road offsets and a car to turn.
+  if (technical) {
+    let minimumRadius = Infinity;
+    for (let i = 0; i < sampleCount; i++) {
+      const angle = (i / sampleCount) * Math.PI * 2;
+      const a = pointAt(angle - 0.005),
+        b = pointAt(angle),
+        c = pointAt(angle + 0.005);
+      const ab = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const bc = Math.hypot(c[0] - b[0], c[1] - b[1]);
+      const ac = Math.hypot(c[0] - a[0], c[1] - a[1]);
+      const cross = Math.abs(
+        (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]),
+      );
+      if (cross > 1e-10)
+        minimumRadius = Math.min(minimumRadius, (ab * bc * ac) / (2 * cross));
+    }
+    scale = Math.max(1, 8.5 / minimumRadius);
+  }
+
   const centerline = Array.from({ length: sampleCount }, (_, index) =>
     pointAt((index / sampleCount) * Math.PI * 2),
   );
@@ -128,7 +157,12 @@ function generateCurvedTrack(recipe: TrackRecipe): RaceTrack {
       right[next][1],
     ]);
   }
-  const checkpointAngles = [Math.PI, Math.PI * 1.5, 0, Math.PI * 0.5];
+  const checkpointAngles = technical
+    ? Array.from(
+        { length: 16 },
+        (_, index) => (((index + 1) % 16) / 16) * Math.PI * 2,
+      )
+    : [Math.PI, Math.PI * 1.5, 0, Math.PI * 0.5];
   const checkpoints = checkpointAngles.map((angle) => {
     const point = pointAt(angle);
     const tangent = tangentAt(angle);
@@ -142,7 +176,7 @@ function generateCurvedTrack(recipe: TrackRecipe): RaceTrack {
       halfDepth: 0.5,
     };
   });
-  const spawnAngle = Math.PI - 0.35;
+  const spawnAngle = technical ? 0 : Math.PI - 0.35;
   const spawn = pointAt(spawnAngle);
   const spawnTangent = tangentAt(spawnAngle);
   return {
