@@ -92,7 +92,6 @@ export class MultiplayerGateway
   server!: Server;
 
   private timer?: ReturnType<typeof setInterval>;
-  private tickCount = 0;
 
   constructor(
     private readonly configService: ConfigService,
@@ -300,11 +299,9 @@ export class MultiplayerGateway
   }
 
   private tick(): void {
-    this.tickCount += 1;
     for (const update of this.roomService.tick()) {
       const target = this.server.to(this.roomName(update.code));
-      if (this.tickCount % 2 === 0)
-        target.emit('race:snapshot', update.snapshot);
+      target.emit('race:snapshot', update.snapshot);
       if (update.result) {
         target.emit('room:state', update.state);
         target.emit('race:finish', update.result);
