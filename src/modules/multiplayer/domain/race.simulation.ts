@@ -108,7 +108,13 @@ export class RaceSimulation {
       (player) =>
         !player.finishedAt && !player.disconnected && !player.eliminated,
     );
-    if (activePlayers.length === 0 || this.elapsedSteps >= maxRaceSteps) {
+    if (
+      activePlayers.length === 0 ||
+      this.elapsedSteps >=
+        (this.track.recipe.version === 'technical-loop-v2'
+          ? 180 / tickSeconds
+          : maxRaceSteps)
+    ) {
       this.status = 'FINISHED';
       this.finishedAt = now;
     }
