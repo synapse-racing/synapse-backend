@@ -24,7 +24,6 @@ interface Room {
   track: TrackRecipe;
   players: Map<string, RoomPlayer>;
   race?: RaceSimulation;
-  finishBroadcasted: boolean;
 }
 
 export class RoomError extends Error {
@@ -78,7 +77,6 @@ export class RoomService {
       maxPlayers,
       track: this.createTrackRecipe(),
       players: new Map([[user.id, player]]),
-      finishBroadcasted: false,
     };
     this.rooms.set(code, room);
     this.indexPlayer(player, code);
@@ -137,7 +135,7 @@ export class RoomService {
       this.rooms.delete(code);
       return { code, state: null };
     }
-    if (room.hostUserId === player.userId && room.status === 'LOBBY') {
+    if (room.hostUserId === player.userId) {
       const nextHost = room.players.values().next();
       room.hostUserId = nextHost.done ? '' : nextHost.value.userId;
     }
@@ -194,6 +192,9 @@ export class RoomService {
     if (room.hostUserId !== player.userId) {
       throw new RoomError('HOST_REQUIRED', 'Only the host can start the race');
     }
+    if (room.status !== 'LOBBY') {
+      throw new RoomError('INVALID_STATE', 'Race is not in lobby');
+    }
     if (room.players.size < 2) {
       throw new RoomError(
         'PLAYERS_REQUIRED',
@@ -237,13 +238,16 @@ export class RoomService {
       const snapshot = room.race.tick(now);
       room.status = snapshot.status;
       const result = room.race.result();
-      const shouldBroadcastResult = Boolean(result) && !room.finishBroadcasted;
-      if (shouldBroadcastResult) room.finishBroadcasted = true;
+      if (result) {
+        room.race = undefined;
+        room.status = 'LOBBY';
+        for (const player of room.players.values()) player.ready = false;
+      }
       updates.push({
         code: room.code,
         state: this.publicState(room),
         snapshot,
-        result: shouldBroadcastResult ? result : null,
+        result,
       });
     }
     return updates;

@@ -1,4 +1,4 @@
-import { RoomError, RoomService } from './room.service';
+import { RoomError, RoomService, type RoomTickUpdate } from './room.service';
 import type { NeatGenome } from '../domain/neat-controller';
 
 const multiplayerTrack = { version: 'curved-loop-v1' as const, seed: 99 };
@@ -107,5 +107,73 @@ describe('RoomService', () => {
 
     const result = service.leave('host-socket');
     expect(result?.state?.hostUserId).toBe('guest');
+  });
+});
+
+function finishRace(service: RoomService, now: number): RoomTickUpdate {
+  for (let time = now; time <= now + 90000; time += 50) {
+    const update = service.tick(time)[0];
+    if (update?.result) return update;
+  }
+  throw new Error('Race did not finish');
+}
+
+describe('race rematches', () => {
+  it('retains the room and genomes, resets readiness, and finishes a second race', () => {
+    const service = new RoomService();
+    const room = service.create({ id: 'host', username: 'Host' }, 'host', 3);
+    service.join(room.code, { id: 'guest', username: 'Guest' }, 'guest');
+    service.selectGenome('host', genome, 'Host AI');
+    service.selectGenome('guest', genome, 'Guest AI');
+    for (const now of [1000, 100000]) {
+      service.setReady('host', true);
+      service.setReady('guest', true);
+      service.start('host', now);
+      expectRoomError(() => service.start('host', now), 'INVALID_STATE');
+      const finished = finishRace(service, now);
+      expect(finished.result).not.toBeNull();
+      expect(finished.snapshot.status).toBe('FINISHED');
+      expect(finished.state).toMatchObject({
+        code: room.code,
+        status: 'LOBBY',
+        track: room.track,
+      });
+      expect(finished.state.players).toEqual([
+        {
+          userId: 'host',
+          username: 'Host',
+          ready: false,
+          genomeName: 'Host AI',
+        },
+        {
+          userId: 'guest',
+          username: 'Guest',
+          ready: false,
+          genomeName: 'Guest AI',
+        },
+      ]);
+      expect(service.tick(now + 61000)).toEqual([]);
+      expectRoomError(() => service.start('host', now + 62000), 'NOT_READY');
+    }
+    expect(
+      service.join(room.code, { id: 'new', username: 'New' }, 'new').players,
+    ).toHaveLength(3);
+  });
+
+  it('retains a valid host when the original host leaves during a race', () => {
+    const service = new RoomService();
+    const room = service.create({ id: 'host', username: 'Host' }, 'host', 2);
+    service.join(room.code, { id: 'guest', username: 'Guest' }, 'guest');
+    for (const socket of ['host', 'guest']) {
+      service.selectGenome(socket, genome, socket);
+      service.setReady(socket, true);
+    }
+    service.start('host', 1000);
+    expect(service.leave('host')?.state?.hostUserId).toBe('guest');
+    const finished = finishRace(service, 1000);
+    expect(finished.state.hostUserId).toBe('guest');
+    expect(service.selectTrack('guest', multiplayerTrack).track).toEqual(
+      multiplayerTrack,
+    );
   });
 });
