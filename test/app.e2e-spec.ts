@@ -163,8 +163,8 @@ describe('AppController (e2e)', () => {
     const login = await request(server)
       .post('/api/auth/login')
       .send({ email: credentials.email, password: credentials.password })
-      .expect(200);
-    expect((login.body as AuthBody).accessToken).toEqual(expect.any(String));
+      .expect(409);
+    expect((login.body as ErrorBody).message).toContain('sesión activa');
 
     await request(server)
       .post('/api/auth/login')
@@ -174,6 +174,75 @@ describe('AppController (e2e)', () => {
         const body = response.body as ErrorBody;
         expect(body.message).toBe('Invalid credentials');
       });
+  });
+
+  it('keeps the original session during a concurrent refresh and login', async () => {
+    const server = app.getHttpServer();
+    const credentials = {
+      email: 'single@example.com',
+      username: 'single_driver',
+      password: 'secure-pass-123',
+    };
+    const registration = await request(server)
+      .post('/api/auth/register')
+      .send(credentials)
+      .expect(201);
+    const cookie = (registration.headers['set-cookie'] as string[])[0].split(
+      ';',
+    )[0];
+    const [refresh] = await Promise.all([
+      request(server)
+        .post('/api/auth/refresh')
+        .set('Cookie', cookie)
+        .expect(200),
+      request(server)
+        .post('/api/auth/login')
+        .send({ email: credentials.email, password: credentials.password })
+        .expect(409),
+    ]);
+    const rotated = (refresh.headers['set-cookie'] as string[])[0].split(
+      ';',
+    )[0];
+    await request(server)
+      .post('/api/auth/logout')
+      .set('Cookie', rotated)
+      .expect(204);
+    const attempts = await Promise.all([
+      request(server)
+        .post('/api/auth/login')
+        .send({ email: credentials.email, password: credentials.password }),
+      request(server)
+        .post('/api/auth/login')
+        .send({ email: credentials.email, password: credentials.password }),
+    ]);
+    expect(attempts.map((response) => response.status).sort()).toEqual([
+      200, 409,
+    ]);
+    expect(
+      await prisma.refreshSession.count({
+        where: { revokedAt: null, expiresAt: { gt: new Date() } },
+      }),
+    ).toBe(1);
+  });
+
+  it('allows login after the previous session expires', async () => {
+    const server = app.getHttpServer();
+    const credentials = {
+      email: 'expired@example.com',
+      username: 'expired_driver',
+      password: 'secure-pass-123',
+    };
+    await request(server)
+      .post('/api/auth/register')
+      .send(credentials)
+      .expect(201);
+    await prisma.refreshSession.updateMany({
+      data: { expiresAt: new Date(0) },
+    });
+    await request(server)
+      .post('/api/auth/login')
+      .send({ email: credentials.email, password: credentials.password })
+      .expect(200);
   });
 
   it('validates registration input and protects the current user', async () => {

@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
@@ -68,15 +72,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid session');
     }
 
-    const revoked = await this.prisma.refreshSession.updateMany({
-      where: { id: session.id, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    if (revoked.count !== 1) {
-      throw new UnauthorizedException('Invalid session');
-    }
-
-    return this.createSession(session.user);
+    return this.createSession(session.user, session.id);
   }
 
   async logout(refreshToken: string | undefined): Promise<void> {
@@ -95,7 +91,10 @@ export class AuthService {
     }
   }
 
-  private async createSession(user: PublicUser): Promise<SessionResult> {
+  private async createSession(
+    user: PublicUser,
+    previousSessionId?: string,
+  ): Promise<SessionResult> {
     const publicUser: PublicUser = {
       id: user.id,
       email: user.email,
@@ -134,13 +133,38 @@ export class AuthService {
       }),
     ]);
 
-    await this.prisma.refreshSession.create({
-      data: {
-        id: sessionId,
-        userId: publicUser.id,
-        tokenHash: await argon2.hash(refreshToken, { type: argon2.argon2id }),
-        expiresAt,
-      },
+    const tokenHash = await argon2.hash(refreshToken, {
+      type: argon2.argon2id,
+    });
+    await this.prisma.$transaction(async (tx) => {
+      // Serialize login and refresh for this account, including concurrent requests.
+      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${user.id}::uuid FOR UPDATE`;
+      const now = new Date();
+      if (previousSessionId) {
+        const revoked = await tx.refreshSession.updateMany({
+          where: {
+            id: previousSessionId,
+            userId: user.id,
+            revokedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: { revokedAt: now },
+        });
+        if (revoked.count !== 1)
+          throw new UnauthorizedException('Invalid session');
+      } else {
+        const active = await tx.refreshSession.findFirst({
+          where: { userId: user.id, revokedAt: null, expiresAt: { gt: now } },
+          select: { id: true },
+        });
+        if (active)
+          throw new ConflictException(
+            'Ya tienes una sesión activa. Ciérrala antes de iniciar sesión en otro lugar.',
+          );
+      }
+      await tx.refreshSession.create({
+        data: { id: sessionId, userId: user.id, tokenHash, expiresAt },
+      });
     });
 
     return { accessToken, refreshToken, user: publicUser };
