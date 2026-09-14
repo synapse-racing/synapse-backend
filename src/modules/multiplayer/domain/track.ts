@@ -1,5 +1,11 @@
+import { generateGrandPrix } from './grand-prix';
+
 export interface TrackRecipe {
-  version: 'rectangular-ring-v1' | 'curved-loop-v1' | 'technical-loop-v2';
+  version:
+    | 'rectangular-ring-v1'
+    | 'curved-loop-v1'
+    | 'technical-loop-v2'
+    | 'grand-prix-v3';
   seed: number;
 }
 
@@ -52,7 +58,8 @@ export function parseTrackRecipe(value: unknown): TrackRecipe {
   if (
     (recipe.version !== 'rectangular-ring-v1' &&
       recipe.version !== 'curved-loop-v1' &&
-      recipe.version !== 'technical-loop-v2') ||
+      recipe.version !== 'technical-loop-v2' &&
+      recipe.version !== 'grand-prix-v3') ||
     !Number.isSafeInteger(recipe.seed) ||
     (recipe.seed as number) < 0 ||
     (recipe.seed as number) > 2_147_483_647
@@ -225,6 +232,8 @@ function generateRectangularTrack(recipe: TrackRecipe): RaceTrack {
 }
 
 export function generateTrack(recipe: TrackRecipe): RaceTrack {
+  if (recipe.version === 'grand-prix-v3')
+    return { recipe: { ...recipe }, ...generateGrandPrix(recipe.seed) };
   return recipe.version === 'rectangular-ring-v1'
     ? generateRectangularTrack(recipe)
     : generateCurvedTrack(recipe);

@@ -111,7 +111,8 @@ export class RaceSimulation {
     if (
       activePlayers.length === 0 ||
       this.elapsedSteps >=
-        (this.track.recipe.version === 'technical-loop-v2'
+        (this.track.recipe.version === 'technical-loop-v2' ||
+        this.track.recipe.version === 'grand-prix-v3'
           ? 180 / tickSeconds
           : maxRaceSteps)
     ) {

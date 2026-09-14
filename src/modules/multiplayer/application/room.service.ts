@@ -294,7 +294,7 @@ export class RoomService {
 
   private createTrackRecipe(): TrackRecipe {
     return {
-      version: 'technical-loop-v2',
+      version: 'grand-prix-v3',
       seed: randomBytes(4).readUInt32LE() & 0x7fffffff,
     };
   }
