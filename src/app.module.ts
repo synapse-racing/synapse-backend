@@ -31,6 +31,7 @@ import { MultiplayerModule } from './modules/multiplayer/multiplayer.module';
       }),
     }),
     ThrottlerModule.forRoot([
+      { name: 'network', ttl: 60_000, limit: 100 },
       {
         ttl: 60_000,
         limit: 100,

@@ -225,6 +225,63 @@ describe('AppController (e2e)', () => {
     ).toBe(1);
   });
 
+  it('isolates sessions and login limits for different accounts on the same IP', async () => {
+    const server = app.getHttpServer();
+    const firstBrowser = request.agent(server);
+    const secondBrowser = request.agent(server);
+    const thirdBrowser = request.agent(server);
+    const first = {
+      email: 'first@example.com',
+      username: 'first_driver',
+      password: 'secure-pass-123',
+    };
+    const second = {
+      email: 'second@example.com',
+      username: 'second_driver',
+      password: 'secure-pass-123',
+    };
+    await firstBrowser.post('/api/auth/register').send(first).expect(201);
+    await secondBrowser.post('/api/auth/register').send(second).expect(201);
+    await firstBrowser.post('/api/auth/logout').expect(204);
+    await secondBrowser.post('/api/auth/logout').expect(204);
+    const [firstLogin, secondLogin] = await Promise.all([
+      firstBrowser
+        .post('/api/auth/login')
+        .send({ email: first.email, password: first.password })
+        .expect(200),
+      secondBrowser
+        .post('/api/auth/login')
+        .send({ email: second.email, password: second.password })
+        .expect(200),
+    ]);
+    expect((firstLogin.body as AuthBody).user.id).not.toBe(
+      (secondLogin.body as AuthBody).user.id,
+    );
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await thirdBrowser
+        .post('/api/auth/login')
+        .send({ email: 'FIRST@EXAMPLE.COM', password: first.password })
+        .expect(409);
+    }
+    await thirdBrowser
+      .post('/api/auth/login')
+      .send({ email: first.email, password: first.password })
+      .expect(429);
+    await firstBrowser.post('/api/auth/refresh').expect(200);
+    await secondBrowser.post('/api/auth/refresh').expect(200);
+    await secondBrowser.post('/api/auth/logout').expect(204);
+    await thirdBrowser
+      .post('/api/auth/login')
+      .send({ email: second.email, password: second.password })
+      .expect(200);
+    await firstBrowser.post('/api/auth/refresh').expect(200);
+    expect(
+      await prisma.refreshSession.count({
+        where: { revokedAt: null, expiresAt: { gt: new Date() } },
+      }),
+    ).toBe(2);
+  });
+
   it('allows login after the previous session expires', async () => {
     const server = app.getHttpServer();
     const credentials = {
