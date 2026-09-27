@@ -137,8 +137,8 @@ export class AuthService {
       type: argon2.argon2id,
     });
     await this.prisma.$transaction(async (tx) => {
-      // Serialize login and refresh for this account, including concurrent requests.
-      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${user.id}::uuid FOR UPDATE`;
+      // Acquire the SQLite write lock before checking this account’s session.
+      await tx.$executeRaw`UPDATE "User" SET "id" = "id" WHERE "id" = ${user.id}`;
       const now = new Date();
       if (previousSessionId) {
         const revoked = await tx.refreshSession.updateMany({

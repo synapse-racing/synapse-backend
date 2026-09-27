@@ -1,7 +1,11 @@
 process.env.NODE_ENV = 'test';
 process.env.FRONTEND_URL = 'http://localhost:5173';
-process.env.DATABASE_URL =
-  'postgresql://synapse:synapse@localhost:5432/synapse_test?schema=public';
+if (!process.env.SYNAPSE_TEST_DATABASE_URL) {
+  throw new Error(
+    'Run e2e tests with pnpm test:e2e to use an isolated database',
+  );
+}
+process.env.DATABASE_URL = process.env.SYNAPSE_TEST_DATABASE_URL;
 process.env.JWT_ACCESS_SECRET =
   'test-access-secret-with-at-least-32-characters';
 process.env.JWT_REFRESH_SECRET =

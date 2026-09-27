@@ -56,8 +56,13 @@ export function validateEnvironment(
 
   const frontendUrl = requireUrl(config, 'FRONTEND_URL');
   const databaseUrl = requireUrl(config, 'DATABASE_URL');
-  if (!databaseUrl.startsWith('postgresql://')) {
-    throw new Error('DATABASE_URL must use the postgresql protocol');
+  if (
+    !databaseUrl.startsWith('file:') ||
+    databaseUrl.slice(5).trim().length === 0
+  ) {
+    throw new Error(
+      'DATABASE_URL must point to a SQLite file (file:./synapse.db)',
+    );
   }
 
   const accessSecret = requireSecret(config, 'JWT_ACCESS_SECRET');

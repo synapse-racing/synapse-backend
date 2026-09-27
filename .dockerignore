@@ -11,3 +11,9 @@ node_modules
 *.log
 Dockerfile*
 compose*.yaml
+
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+/data/
