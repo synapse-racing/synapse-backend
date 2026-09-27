@@ -21,6 +21,8 @@ FROM node:24-alpine AS runtime
 RUN apk add --no-cache dumb-init
 WORKDIR /app
 ENV NODE_ENV=production
+ENV DATABASE_URL=file:/app/data/synapse.db
+RUN mkdir -p /app/data && chown node:node /app/data
 
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist

@@ -1,55 +1,41 @@
 const { spawnSync } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
-const { PrismaClient } = require('@prisma/client');
 
-const testDatabaseUrl =
-  'postgresql://synapse:synapse@localhost:5432/synapse_test?schema=public';
+const directory = fs.mkdtempSync(path.resolve(__dirname, '../prisma/.test-'));
+fs.closeSync(fs.openSync(path.join(directory, 'test.db'), 'wx'));
+const databaseUrl = 'file:./' + path.basename(directory) + '/test.db';
 const options = {
   cwd: path.resolve(__dirname, '..'),
-  env: { ...process.env, DATABASE_URL: testDatabaseUrl },
-  shell: process.platform === 'win32',
+  env: {
+    ...process.env,
+    DATABASE_URL: databaseUrl,
+    SYNAPSE_TEST_DATABASE_URL: databaseUrl,
+  },
   stdio: 'inherit',
 };
 
-async function run() {
-  const admin = new PrismaClient({
-    datasourceUrl:
-      'postgresql://synapse:synapse@localhost:5432/postgres?schema=public',
-  });
-  try {
-    const existing = await admin.$queryRawUnsafe(
-      "SELECT 1 FROM pg_database WHERE datname = 'synapse_test'",
-    );
-    if (existing.length === 0) {
-      await admin.$executeRawUnsafe('CREATE DATABASE synapse_test');
-    }
-  } finally {
-    await admin.$disconnect();
-  }
-
+try {
   const migration = spawnSync(
-    'corepack',
-    ['pnpm', 'exec', 'prisma', 'migrate', 'deploy'],
+    process.execPath,
+    [require.resolve('prisma/build/index.js'), 'migrate', 'deploy'],
     options,
   );
-  if (migration.status !== 0) process.exit(migration.status ?? 1);
-
-  const tests = spawnSync(
-    'corepack',
-    [
-      'pnpm',
-      'exec',
-      'jest',
-      '--config',
-      './test/jest-e2e.json',
-      ...process.argv.slice(2),
-    ],
-    options,
-  );
-  process.exit(tests.status ?? 1);
+  if (migration.status !== 0) {
+    process.exitCode = migration.status ?? 1;
+  } else {
+    const tests = spawnSync(
+      process.execPath,
+      [
+        require.resolve('jest/bin/jest'),
+        '--config',
+        './test/jest-e2e.json',
+        ...process.argv.slice(2),
+      ],
+      options,
+    );
+    process.exitCode = tests.status ?? 1;
+  }
+} finally {
+  fs.rmSync(directory, { recursive: true, force: true });
 }
-
-run().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});

@@ -6,7 +6,7 @@ API NestJS para autenticacion, persistencia de entrenamientos NEAT y carreras mu
 
 - Node.js 24 o superior.
 - Corepack habilitado.
-- Docker Desktop o una instancia PostgreSQL compatible.
+- SQLite se crea automaticamente al aplicar las migraciones; no requiere un servidor de base de datos.
 
 ## Instalacion
 
@@ -20,7 +20,6 @@ Copia `.env.example` como `.env`. Los valores incluidos sirven para desarrollo l
 ## Base de datos
 
 ```bash
-docker compose up -d
 pnpm prisma:generate
 ```
 
@@ -29,6 +28,8 @@ Para aplicar las migraciones versionadas existentes:
 ```bash
 pnpm db:deploy
 ```
+
+`DATABASE_URL=file:./synapse.db` guarda la base en `prisma/synapse.db`. Esta migracion inicia una base vacia; no importa datos de PostgreSQL. Los tests e2e crean su propia base temporal.
 
 Usa `pnpm db:migrate` unicamente al crear una nueva migracion durante el desarrollo.
 
@@ -55,6 +56,8 @@ POST /api/auth/refresh
 POST /api/auth/logout
 GET  /api/auth/me
 ```
+
+Solo se permite una sesion activa por cuenta. Distintas cuentas pueden jugar simultaneamente desde la misma IP usando navegadores o perfiles independientes. Cerrar el navegador no cierra la sesion: usa Cerrar sesion para liberar la cuenta.
 
 El access token se envia como Bearer JWT. El refresh token es rotatorio y se almacena en una cookie `HttpOnly`; la base de datos conserva exclusivamente su hash Argon2id.
 

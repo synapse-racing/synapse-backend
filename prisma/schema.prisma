@@ -3,14 +3,14 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id           String           @id @default(uuid()) @db.Uuid
-  email        String           @unique @db.VarChar(320)
-  username     String           @unique @db.VarChar(32)
+  id           String           @id @default(uuid())
+  email        String           @unique
+  username     String           @unique
   passwordHash String
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
@@ -25,29 +25,29 @@ enum TrainingStatus {
 }
 
 model TrainingRun {
-  id                String               @id @default(uuid()) @db.Uuid
-  userId            String               @db.Uuid
-  name              String               @db.VarChar(80)
+  id                String               @id @default(uuid())
+  userId            String
+  name              String
   status            TrainingStatus       @default(PAUSED)
   seed              Int
   currentGeneration Int                  @default(0)
   bestFitness       Float                @default(0)
-  config             Json
-  bestGenome         Json?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  startedAt          DateTime?
-  finishedAt         DateTime?
-  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  checkpoints        TrainingCheckpoint[]
-  metrics            GenerationMetric[]
+  config            Json
+  bestGenome        Json?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkpoints       TrainingCheckpoint[]
+  metrics           GenerationMetric[]
 
   @@index([userId, updatedAt])
 }
 
 model TrainingCheckpoint {
-  id            String      @id @default(uuid()) @db.Uuid
-  trainingRunId String      @db.Uuid
+  id            String      @id @default(uuid())
+  trainingRunId String
   generation    Int
   snapshot      Json
   createdAt     DateTime    @default(now())
@@ -57,23 +57,23 @@ model TrainingCheckpoint {
 }
 
 model GenerationMetric {
-  id              String      @id @default(uuid()) @db.Uuid
-  trainingRunId   String      @db.Uuid
-  generation      Int
-  bestFitness     Float
-  averageFitness  Float
-  speciesCount    Int
-  durationMs      Int
-  createdAt       DateTime    @default(now())
-  trainingRun     TrainingRun @relation(fields: [trainingRunId], references: [id], onDelete: Cascade)
+  id             String      @id @default(uuid())
+  trainingRunId  String
+  generation     Int
+  bestFitness    Float
+  averageFitness Float
+  speciesCount   Int
+  durationMs     Int
+  createdAt      DateTime    @default(now())
+  trainingRun    TrainingRun @relation(fields: [trainingRunId], references: [id], onDelete: Cascade)
 
   @@unique([trainingRunId, generation])
   @@index([trainingRunId, generation])
 }
 
 model RefreshSession {
-  id        String    @id @default(uuid()) @db.Uuid
-  userId    String    @db.Uuid
+  id        String    @id @default(uuid())
+  userId    String
   tokenHash String
   expiresAt DateTime
   revokedAt DateTime?
