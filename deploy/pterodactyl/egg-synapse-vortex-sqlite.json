@@ -1,0 +1,62 @@
+{
+  "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-01-30T20:57:00-03:00",
+  "name": "Synapse Backend - VortexSpace Node.js",
+  "author": "rotafn@proton.me",
+  "description": "Synapse NestJS backend with pnpm and persistent SQLite. Upload start-pterodactyl.sh to /home/container. Requires backend source, lockfile, workspace file and .env secrets.",
+  "features": [],
+  "docker_images": {
+    "NodeJS 24": "ghcr.io/fnicefire/nodejs-egg:v24"
+  },
+  "file_denylist": [],
+  "startup": "sh /home/container/start-pterodactyl.sh",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\":\"Nest application successfully started\"}",
+    "logs": "{}",
+    "stop": "^^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": null,
+      "container": "alpine:3.4",
+      "entrypoint": "ash"
+    }
+  },
+  "variables": [
+    {
+      "name": "Package Manager",
+      "description": "This backend uses pnpm.",
+      "env_variable": "PACKAGE_MANAGER",
+      "default_value": "pnpm",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|string|in:pnpm",
+      "field_type": "text"
+    },
+    {
+      "name": "CI",
+      "description": "Non-interactive dependency installation. Must be an egg environment variable, not only in .env.",
+      "env_variable": "CI",
+      "default_value": "true",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|string|in:true",
+      "field_type": "text"
+    },
+    {
+      "name": "SQLite database",
+      "description": "Persistent database file. Default directory is created by startup script. For custom paths create the parent directory first.",
+      "env_variable": "DATABASE_URL",
+      "default_value": "file:/home/container/data/synapse.db",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|max:256",
+      "field_type": "text"
+    }
+  ]
+}
