@@ -20,6 +20,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { createHash } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { AuthService } from '../application/auth.service';
 import { AuthResponse, SessionResult } from '../domain/auth.types';
@@ -31,6 +32,15 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
 const refreshCookieName = 'synapse_refresh';
+
+function loginTracker(request: Record<string, unknown>): string {
+  const body = request.body as { email?: unknown } | undefined;
+  const email =
+    typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+  return createHash('sha256')
+    .update(JSON.stringify([request.ip, email]))
+    .digest('hex');
+}
 
 @ApiTags('auth')
 @Controller('auth')
@@ -58,7 +68,7 @@ export class AuthController {
   @ApiConflictResponse({ description: 'An account session is already active' })
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: 5, ttl: 60_000, getTracker: loginTracker } })
   @ApiOperation({ summary: 'Start a session with email and password' })
   @ApiOkResponse({ description: 'Authenticated', type: AuthResponseDto })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
