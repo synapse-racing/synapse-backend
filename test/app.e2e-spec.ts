@@ -160,11 +160,10 @@ describe('AppController (e2e)', () => {
       .post('/api/auth/register')
       .send(credentials)
       .expect(409);
-    const login = await request(server)
+    await request(server)
       .post('/api/auth/login')
       .send({ email: credentials.email, password: credentials.password })
-      .expect(409);
-    expect((login.body as ErrorBody).message).toContain('sesión activa');
+      .expect(200);
 
     await request(server)
       .post('/api/auth/login')
@@ -176,7 +175,7 @@ describe('AppController (e2e)', () => {
       });
   });
 
-  it('keeps the original session during a concurrent refresh and login', async () => {
+  it('allows concurrent logins and refresh without revoking other sessions', async () => {
     const server = app.getHttpServer();
     const credentials = {
       email: 'single@example.com',
@@ -198,7 +197,7 @@ describe('AppController (e2e)', () => {
       request(server)
         .post('/api/auth/login')
         .send({ email: credentials.email, password: credentials.password })
-        .expect(409),
+        .expect(200),
     ]);
     const rotated = (refresh.headers['set-cookie'] as string[])[0].split(
       ';',
@@ -216,13 +215,13 @@ describe('AppController (e2e)', () => {
         .send({ email: credentials.email, password: credentials.password }),
     ]);
     expect(attempts.map((response) => response.status).sort()).toEqual([
-      200, 409,
+      200, 200,
     ]);
     expect(
       await prisma.refreshSession.count({
         where: { revokedAt: null, expiresAt: { gt: new Date() } },
       }),
-    ).toBe(1);
+    ).toBe(3);
   });
 
   it('isolates sessions and login limits for different accounts on the same IP', async () => {
@@ -260,8 +259,8 @@ describe('AppController (e2e)', () => {
     for (let attempt = 0; attempt < 4; attempt++) {
       await thirdBrowser
         .post('/api/auth/login')
-        .send({ email: 'FIRST@EXAMPLE.COM', password: first.password })
-        .expect(409);
+        .send({ email: 'FIRST@EXAMPLE.COM', password: 'wrong-password' })
+        .expect(401);
     }
     await thirdBrowser
       .post('/api/auth/login')
