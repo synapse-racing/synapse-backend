@@ -177,3 +177,18 @@ describe('race rematches', () => {
     );
   });
 });
+
+it('restricts speed changes to the current host and rejects invalid speeds', () => {
+  const service = new RoomService();
+  const created = service.create({ id: 'host', username: 'Host' }, 'host', 2);
+  service.join(created.code, { id: 'guest', username: 'Guest' }, 'guest');
+  expect(created.timeScale).toBe(1);
+  expectRoomError(() => service.setTimeScale('guest', 4), 'HOST_REQUIRED');
+  expectRoomError(() => service.setTimeScale('outsider', 4), 'NOT_IN_ROOM');
+  for (const speed of [0, -1, 3, 100, NaN, Infinity]) {
+    expectRoomError(() => service.setTimeScale('host', speed), 'INVALID_SPEED');
+  }
+  expect(service.setTimeScale('host', 4).timeScale).toBe(4);
+  expect(service.leave('host')?.state?.timeScale).toBe(4);
+  expect(service.setTimeScale('guest', 1).timeScale).toBe(1);
+});

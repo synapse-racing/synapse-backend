@@ -51,6 +51,7 @@ export interface RoomPlayer {
 export interface PublicRoomState {
   code: string;
   hostUserId: string;
+  timeScale: number;
   status: RoomStatus;
   maxPlayers: number;
   track: TrackRecipe;
