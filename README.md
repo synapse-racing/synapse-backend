@@ -57,7 +57,7 @@ POST /api/auth/logout
 GET  /api/auth/me
 ```
 
-Solo se permite una sesion activa por cuenta. Distintas cuentas pueden jugar simultaneamente desde la misma IP usando navegadores o perfiles independientes. Cerrar el navegador no cierra la sesion: usa Cerrar sesion para liberar la cuenta.
+Una cuenta puede mantener varias sesiones simultaneas. Cerrar sesion revoca solo la sesion del navegador actual.
 
 El access token se envia como Bearer JWT. El refresh token es rotatorio y se almacena en una cookie `HttpOnly`; la base de datos conserva exclusivamente su hash Argon2id.
 

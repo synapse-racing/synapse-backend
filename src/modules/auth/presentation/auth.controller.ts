@@ -65,7 +65,6 @@ export class AuthController {
     );
   }
 
-  @ApiConflictResponse({ description: 'An account session is already active' })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60_000, getTracker: loginTracker } })

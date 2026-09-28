@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
@@ -137,8 +133,6 @@ export class AuthService {
       type: argon2.argon2id,
     });
     await this.prisma.$transaction(async (tx) => {
-      // Acquire the SQLite write lock before checking this account’s session.
-      await tx.$executeRaw`UPDATE "User" SET "id" = "id" WHERE "id" = ${user.id}`;
       const now = new Date();
       if (previousSessionId) {
         const revoked = await tx.refreshSession.updateMany({
@@ -152,15 +146,6 @@ export class AuthService {
         });
         if (revoked.count !== 1)
           throw new UnauthorizedException('Invalid session');
-      } else {
-        const active = await tx.refreshSession.findFirst({
-          where: { userId: user.id, revokedAt: null, expiresAt: { gt: now } },
-          select: { id: true },
-        });
-        if (active)
-          throw new ConflictException(
-            'Ya tienes una sesión activa. Ciérrala antes de iniciar sesión en otro lugar.',
-          );
       }
       await tx.refreshSession.create({
         data: { id: sessionId, userId: user.id, tokenHash, expiresAt },
