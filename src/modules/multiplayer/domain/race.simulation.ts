@@ -84,13 +84,28 @@ export class RaceSimulation {
     if (player) player.disconnected = true;
   }
 
-  tick(now = Date.now()): RaceSnapshot {
+  tick(now = Date.now(), timeScale = 1): RaceSnapshot {
+    if (![1, 2, 4].includes(timeScale))
+      throw new Error('Invalid simulation speed');
     if (this.status === 'FINISHED') return this.snapshot(now);
     if (now < this.startAt) return this.snapshot(now);
     if (this.status === 'COUNTDOWN') {
       this.status = 'RACING';
     }
 
+    for (let step = 0; step < timeScale; step += 1) {
+      // Keep physics fixed and distinguish finish times within each network tick.
+      const stepTime = Math.max(
+        this.startAt,
+        now - ((timeScale - step - 1) * 50) / timeScale,
+      );
+      this.advance(stepTime);
+      if (this.result()) break;
+    }
+    return this.snapshot(now);
+  }
+
+  private advance(now: number): void {
     for (const player of this.players.values()) {
       if (player.finishedAt || player.disconnected || player.eliminated)
         continue;
@@ -121,7 +136,6 @@ export class RaceSimulation {
     }
 
     this.updateRanks();
-    return this.snapshot(now);
   }
 
   result(): RaceResult | null {

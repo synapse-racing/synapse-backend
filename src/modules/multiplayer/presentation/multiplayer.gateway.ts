@@ -29,6 +29,7 @@ import type {
 import { CreateRoomDto } from './dto/create-room.dto';
 import { JoinRoomDto } from './dto/join-room.dto';
 import { RaceInputDto } from './dto/race-input.dto';
+import { RaceSpeedDto } from './dto/race-speed.dto';
 import { ReadyDto } from './dto/ready.dto';
 import { SelectGenomeDto } from './dto/select-genome.dto';
 import { parseNeatGenome, type NeatGenome } from '../domain/neat-controller';
@@ -46,6 +47,7 @@ interface ClientToServerEvents {
   'player:ready': (input: ReadyDto) => void;
   'player:select-genome': (input: SelectGenomeDto) => void;
   'room:select-track': (input: SelectTrackDto) => void;
+  'race:set-speed': (input: RaceSpeedDto) => void;
   'race:start': () => void;
   'race:input': (input: RaceInput) => void;
 }
@@ -245,6 +247,17 @@ export class MultiplayerGateway
         client.id,
         parseTrackRecipe(input.track),
       );
+      this.server.to(this.roomName(state.code)).emit('room:state', state);
+    });
+  }
+
+  @SubscribeMessage('race:set-speed')
+  setRaceSpeed(
+    @ConnectedSocket() client: MultiplayerSocket,
+    @MessageBody() input: RaceSpeedDto,
+  ): void {
+    this.execute(client, () => {
+      const state = this.roomService.setTimeScale(client.id, input.timeScale);
       this.server.to(this.roomName(state.code)).emit('room:state', state);
     });
   }

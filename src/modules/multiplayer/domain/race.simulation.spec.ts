@@ -148,3 +148,38 @@ describe('RaceSimulation', () => {
     expect(snapshot.players[0].eliminationReason).toBe('STALLED');
   });
 });
+
+describe('accelerated simulation', () => {
+  it.each([2, 4])(
+    'preserves physics at %ix and keeps countdown in real time',
+    (speed) => {
+      const competitors = [
+        { userId: 'pilot', username: 'Pilot', genome: autonomousGenome },
+      ];
+      const normal = new RaceSimulation(competitors, 1000);
+      const accelerated = new RaceSimulation(competitors, 1000);
+      expect(accelerated.tick(3999, speed).status).toBe('COUNTDOWN');
+      let expected = normal.tick(4000);
+      for (let step = 1; step < speed * 5; step++)
+        expected = normal.tick(4000 + step * 50);
+      let actual = accelerated.tick(4000, speed);
+      for (let step = 1; step < 5; step++)
+        actual = accelerated.tick(4000 + step * 50, speed);
+      expect(actual.players).toEqual(expected.players);
+      expect(actual.status).toBe(expected.status);
+      expect(actual.serverTime).toBe(4200);
+      expect(accelerated.tick(4250, 1).players).toEqual(
+        normal.tick(4000 + speed * 5 * 50).players,
+      );
+    },
+  );
+
+  it('uses simulation time for stall elimination at accelerated speeds', () => {
+    const race = new RaceSimulation([{ userId: 'idle', username: 'Idle' }], 0);
+    for (let tick = 0; tick < 14; tick++)
+      expect(race.tick(3000 + tick * 50, 4).status).toBe('RACING');
+    const finished = race.tick(3700, 4);
+    expect(finished.status).toBe('FINISHED');
+    expect(finished.players[0].eliminationReason).toBe('STALLED');
+  });
+});

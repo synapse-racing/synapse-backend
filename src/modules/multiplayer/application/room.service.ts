@@ -19,6 +19,7 @@ import {
 interface Room {
   code: string;
   hostUserId: string;
+  timeScale: number;
   status: RoomStatus;
   maxPlayers: number;
   track: TrackRecipe;
@@ -73,6 +74,7 @@ export class RoomService {
     const room: Room = {
       code,
       hostUserId: user.id,
+      timeScale: 1,
       status: 'LOBBY',
       maxPlayers,
       track: this.createTrackRecipe(),
@@ -221,6 +223,21 @@ export class RoomService {
     return { state: this.publicState(room), startAt: room.race.startAt };
   }
 
+  setTimeScale(socketId: string, timeScale: number): PublicRoomState {
+    const { room, player } = this.requireMembership(socketId);
+    if (room.hostUserId !== player.userId) {
+      throw new RoomError(
+        'HOST_REQUIRED',
+        'Solo el anfitrión puede cambiar la velocidad',
+      );
+    }
+    if (![1, 2, 4].includes(timeScale)) {
+      throw new RoomError('INVALID_SPEED', 'La velocidad debe ser 1, 2 o 4');
+    }
+    room.timeScale = timeScale;
+    return this.publicState(room);
+  }
+
   submitInput(socketId: string, input: RaceInput): boolean {
     const { room, player } = this.requireMembership(socketId);
     if (!room.race) return false;
@@ -235,7 +252,7 @@ export class RoomService {
     const updates: RoomTickUpdate[] = [];
     for (const room of this.rooms.values()) {
       if (!room.race) continue;
-      const snapshot = room.race.tick(now);
+      const snapshot = room.race.tick(now, room.timeScale);
       room.status = snapshot.status;
       const result = room.race.result();
       if (result) {
@@ -303,6 +320,7 @@ export class RoomService {
     return {
       code: room.code,
       hostUserId: room.hostUserId,
+      timeScale: room.timeScale,
       status: room.status,
       maxPlayers: room.maxPlayers,
       track: room.track,
