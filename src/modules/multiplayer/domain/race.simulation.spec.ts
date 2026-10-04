@@ -183,3 +183,39 @@ describe('accelerated simulation', () => {
     expect(finished.players[0].eliminationReason).toBe('STALLED');
   });
 });
+
+it.each([-1, 1])(
+  'finishes at road edge %i and retains the final pose',
+  (side) => {
+    const track = generateTrack({ version: 'grand-prix-v3', seed: 42170 });
+    if (track.geometry.kind === 'rectangular-ring')
+      throw new Error('Expected curved track');
+    const finish = track.checkpoints.at(-1)!;
+    const lateral = side * (track.geometry.driveHalfWidth - 0.05);
+    const race = new RaceSimulation(
+      [{ userId: 'pilot', username: 'Pilot' }],
+      0,
+      {
+        ...track,
+        checkpoints: [finish],
+        spawn: {
+          x:
+            finish.x +
+            Math.cos(finish.yaw) * lateral +
+            Math.sin(finish.yaw) * 0.501,
+          z:
+            finish.z -
+            Math.sin(finish.yaw) * lateral +
+            Math.cos(finish.yaw) * 0.501,
+          yaw: finish.yaw,
+        },
+      },
+    );
+    race.submitInput('pilot', { sequence: 1, steering: 0, throttle: 1 });
+    const snapshot = race.tick(race.startAt, 4);
+    expect(snapshot.status).toBe('FINISHED');
+    expect(snapshot.players[0].laps).toBe(1);
+    expect(snapshot.players[0].eliminated).toBe(false);
+    expect(race.tick(race.startAt + 50, 4).players).toEqual(snapshot.players);
+  },
+);

@@ -5,6 +5,7 @@ import {
   RaceSnapshot,
   RoomStatus,
 } from './multiplayer.types';
+import { crossesCheckpoint } from './checkpoint-crossing';
 import { evaluateNeatGenome, type NeatGenome } from './neat-controller';
 import { generateTrack, prototypeTrackRecipe, type RaceTrack } from './track';
 
@@ -193,7 +194,20 @@ export class RaceSimulation {
       if (inside) player.insideCheckpoints.add(index);
       else player.insideCheckpoints.delete(index);
 
-      if (inside && !wasInside && index === player.expectedCheckpoint) {
+      const crossed = crossesCheckpoint(
+        previousX,
+        previousZ,
+        player.x,
+        player.z,
+        checkpoint.x,
+        checkpoint.z,
+        checkpoint.yaw,
+        this.track.geometry.kind === 'rectangular-ring'
+          ? checkpoint.halfWidth
+          : Math.max(checkpoint.halfWidth, this.track.geometry.driveHalfWidth),
+        checkpoint.halfDepth,
+      );
+      if (crossed && !wasInside && index === player.expectedCheckpoint) {
         player.passedCheckpoints += 1;
         if (index === this.track.checkpoints.length - 1) {
           player.laps += 1;

@@ -179,7 +179,7 @@ function generateCurvedTrack(recipe: TrackRecipe): RaceTrack {
       x: point[0],
       z: point[1],
       yaw: Math.atan2(-normalZ, normalX),
-      halfWidth: driveHalfWidth - 0.25,
+      halfWidth: driveHalfWidth,
       halfDepth: 0.5,
     };
   });
