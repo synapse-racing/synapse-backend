@@ -192,3 +192,34 @@ it('restricts speed changes to the current host and rejects invalid speeds', () 
   expect(service.leave('host')?.state?.timeScale).toBe(4);
   expect(service.setTimeScale('guest', 1).timeScale).toBe(1);
 });
+
+it('supports 64 players and prevents a 65th player joining', () => {
+  const service = new RoomService();
+  const room = service.create({ id: 'p0', username: 'Player 0' }, 's0', 64);
+  for (let i = 1; i < 64; i++) {
+    const joined = service.join(
+      room.code,
+      { id: 'p' + i, username: 'Player ' + i },
+      's' + i,
+    );
+    expect(joined.players).toHaveLength(i + 1);
+  }
+  expectRoomError(
+    () => service.join(room.code, { id: 'extra', username: 'Extra' }, 'extra'),
+    'ROOM_FULL',
+  );
+});
+it.each([0, 1, 65, 2.5, NaN, Infinity])(
+  'rejects invalid capacity %s',
+  (capacity) => {
+    expectRoomError(
+      () =>
+        new RoomService().create(
+          { id: 'host', username: 'Host' },
+          'host',
+          capacity,
+        ),
+      'INVALID_CAPACITY',
+    );
+  },
+);

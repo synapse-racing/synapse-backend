@@ -55,10 +55,10 @@ export class RoomService {
     maxPlayers: number,
   ): PublicRoomState {
     this.ensureAvailable(user.id);
-    if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 4) {
+    if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 64) {
       throw new RoomError(
         'INVALID_CAPACITY',
-        'Room capacity must be between 2 and 4',
+        'La capacidad debe ser un número entero entre 2 y 64',
       );
     }
 
