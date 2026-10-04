@@ -304,7 +304,7 @@ export function generateGrandPrix(seed: number) {
         x: p.x,
         z: p.z,
         yaw: p.yaw,
-        halfWidth: halfWidth - 0.25,
+        halfWidth,
         halfDepth: 0.5,
       };
     });
