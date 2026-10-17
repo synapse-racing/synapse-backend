@@ -34,3 +34,25 @@ Para habilitar el replica set del servidor de MongoDB consulta [PTERODACTYL-MONG
 Comprueba `/api/health/ready`, registro, login, guardado y recuperacion de una generacion. Las pruebas e2e usan una base temporal local y nunca tu servidor externo. Conserva el servidor y los datos SQLite anteriores hasta aprobar el cambio; volver al codigo previo permite seguir usando esa base.
 
 Realiza backups con `mongodump` y comprueba la restauracion con `mongorestore` en una base aparte. Para respaldos consistentes con escrituras concurrentes usa el procedimiento de backup del replica set y su oplog. Un replica set de un nodo permite transacciones, pero no aporta redundancia. Termina TLS en el proxy del frontend y protege la conexion a MongoDB con TLS o una red privada segun tu infraestructura.
+
+## Evitar copias anidadas al subir un ZIP
+
+Descarga la rama `migration/mongodb`, no `main`. Extrae el ZIP y sube el contenido de la carpeta del proyecto directamente a `/home/container`:
+
+```text
+/home/container/
+  .env
+  package.json
+  pnpm-lock.yaml
+  pnpm-workspace.yaml
+  nest-cli.json
+  tsconfig.json
+  tsconfig.build.json
+  start-pterodactyl.sh
+  src/
+  prisma/schema.prisma
+```
+
+No mezcles `src/` de una version con `prisma/` de otra. El schema activo debe indicar `provider = "mongodb"`. No subas `node_modules`, `dist` ni archivos `.tsbuildinfo` del equipo local; se generan en el servidor. Conserva tu `.env` privado.
+
+Un error de compilacion que menciona `synapse-backend-main/src/...`, combinado con `$runCommandRaw` inexistente o `bestGenome: null` incompatible, indica que se estan mezclando fuentes y un cliente Prisma relacional. La compilacion ahora incluye solo el directorio raiz `src/`, y el arranque comprueba el schema antes de instalar o generar Prisma. Esto detecta una subida incompleta; no reemplaza los archivos del despliegue automaticamente.
