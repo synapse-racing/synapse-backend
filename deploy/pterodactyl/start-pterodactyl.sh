@@ -38,7 +38,12 @@ echo "Generating Prisma client..."
 node node_modules/prisma/build/index.js generate --schema prisma/schema.prisma
 
 echo "Building backend..."
-node node_modules/@nestjs/cli/bin/nest.js build
+node node_modules/@nestjs/cli/bin/nest.js build --path tsconfig.build.json
+
+if [ ! -f dist/main.js ]; then
+  echo "Build did not produce /home/container/dist/main.js. Upload the current tsconfig.build.json and nest-cli.json from main." >&2
+  exit 1
+fi
 
 echo "Preparing MongoDB indexes..."
 node node_modules/prisma/build/index.js db push --schema prisma/schema.prisma --skip-generate
