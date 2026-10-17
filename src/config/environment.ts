@@ -57,11 +57,11 @@ export function validateEnvironment(
   const frontendUrl = requireUrl(config, 'FRONTEND_URL');
   const databaseUrl = requireUrl(config, 'DATABASE_URL');
   if (
-    !databaseUrl.startsWith('file:') ||
-    databaseUrl.slice(5).trim().length === 0
+    !/^mongodb(?:\+srv)?:\/\//.test(databaseUrl) ||
+    new URL(databaseUrl).pathname.replace(/^\//, '').length === 0
   ) {
     throw new Error(
-      'DATABASE_URL must point to a SQLite file (file:./synapse.db)',
+      'DATABASE_URL must be a MongoDB URL with an explicit database name',
     );
   }
 
