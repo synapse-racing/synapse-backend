@@ -77,7 +77,7 @@ export class TrainingService {
   async updateTrack(userId: string, id: string, trackInput: TrackRecipe) {
     const track = parseTrackRecipe(trackInput);
     const trackJson = { version: track.version, seed: track.seed };
-    return this.prisma.$transaction(async (transaction) => {
+    return this.prisma.transaction(async (transaction) => {
       const trainingRun = await transaction.trainingRun.findFirst({
         where: { id, userId },
       });
@@ -113,7 +113,7 @@ export class TrainingService {
           },
           status: TrainingStatus.PAUSED,
           bestFitness: 0,
-          bestGenome: Prisma.DbNull,
+          bestGenome: null,
         },
         select: trainingSummarySelect,
       });
@@ -121,11 +121,13 @@ export class TrainingService {
   }
 
   async delete(userId: string, id: string): Promise<void> {
-    const result = await this.prisma.trainingRun.deleteMany({
-      where: { id, userId },
+    await this.prisma.transaction(async (tx) => {
+      const run = await tx.trainingRun.findFirst({ where: { id, userId } });
+      if (!run) throw new NotFoundException('Training run not found');
+      await tx.trainingCheckpoint.deleteMany({ where: { trainingRunId: id } });
+      await tx.generationMetric.deleteMany({ where: { trainingRunId: id } });
+      await tx.trainingRun.delete({ where: { id } });
     });
-    if (result.count !== 1)
-      throw new NotFoundException('Training run not found');
   }
 
   async saveCheckpoint(userId: string, id: string, input: SaveCheckpointDto) {
@@ -133,7 +135,7 @@ export class TrainingService {
       throw new BadRequestException('Unsupported snapshot version');
     }
 
-    return this.prisma.$transaction(async (transaction) => {
+    return this.prisma.transaction(async (transaction) => {
       const trainingRun = await transaction.trainingRun.findFirst({
         where: { id, userId },
       });

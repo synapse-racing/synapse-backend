@@ -5,9 +5,9 @@
     "update_url": null
   },
   "exported_at": "2026-01-30T20:57:00-03:00",
-  "name": "Synapse Backend - VortexSpace Node.js",
+  "name": "Synapse Backend - MongoDB",
   "author": "rotafn@proton.me",
-  "description": "Synapse NestJS backend with pnpm and persistent SQLite. Upload start-pterodactyl.sh to /home/container. Requires backend source, lockfile, workspace file and .env secrets.",
+  "description": "Synapse NestJS backend with external MongoDB replica set. Configure DATABASE_URL in a private .env file. Upload start-pterodactyl.sh to /home/container.",
   "features": [],
   "docker_images": {
     "NodeJS 24": "ghcr.io/fnicefire/nodejs-egg:v24"
@@ -46,16 +46,6 @@
       "user_viewable": true,
       "user_editable": false,
       "rules": "required|string|in:true",
-      "field_type": "text"
-    },
-    {
-      "name": "SQLite database",
-      "description": "Persistent database file. Default directory is created by startup script. For custom paths create the parent directory first.",
-      "env_variable": "DATABASE_URL",
-      "default_value": "file:/home/container/data/synapse.db",
-      "user_viewable": true,
-      "user_editable": true,
-      "rules": "required|string|max:256",
       "field_type": "text"
     }
   ]

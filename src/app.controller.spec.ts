@@ -10,7 +10,9 @@ describe('AppController', () => {
   let queryDatabase: jest.Mock;
 
   beforeEach(async () => {
-    queryDatabase = jest.fn().mockResolvedValue([{ '?column?': 1 }]);
+    queryDatabase = jest
+      .fn()
+      .mockResolvedValue({ ok: 1, setName: 'rs0', isWritablePrimary: true });
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
       providers: [
@@ -22,7 +24,7 @@ describe('AppController', () => {
         {
           provide: PrismaService,
           useValue: {
-            $queryRawUnsafe: queryDatabase,
+            $runCommandRaw: queryDatabase,
           },
         },
       ],
@@ -47,6 +49,13 @@ describe('AppController', () => {
         environment: 'test',
         dependencies: { database: 'up' },
       });
+    });
+
+    it('should reject a standalone server that cannot run transactions', async () => {
+      queryDatabase.mockResolvedValueOnce({ ok: 1, isWritablePrimary: true });
+      await expect(appController.getReadiness()).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
     });
 
     it('should reject readiness when the database is unavailable', async () => {

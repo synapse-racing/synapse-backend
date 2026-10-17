@@ -6,7 +6,7 @@ API NestJS para autenticacion, persistencia de entrenamientos NEAT y carreras mu
 
 - Node.js 24 o superior.
 - Corepack habilitado.
-- SQLite se crea automaticamente al aplicar las migraciones; no requiere un servidor de base de datos.
+- MongoDB con replica set habilitado (tambien puede ser de un nodo). Para desarrollo local: `docker compose up -d mongo`.
 
 ## Instalacion
 
@@ -23,15 +23,17 @@ Copia `.env.example` como `.env`. Los valores incluidos sirven para desarrollo l
 pnpm prisma:generate
 ```
 
-Para aplicar las migraciones versionadas existentes:
+Para preparar colecciones e indices en una base nueva:
 
 ```bash
-pnpm db:deploy
+pnpm db:push
 ```
 
-`DATABASE_URL=file:./synapse.db` guarda la base en `prisma/synapse.db`. Esta migracion inicia una base vacia; no importa datos de PostgreSQL. Los tests e2e crean su propia base temporal.
+`DATABASE_URL` debe incluir la base y el replica set. MongoDB usa `db push`, no Prisma Migrate. `db:deploy` es un alias de `db:push` para los scripts existentes. No se importa SQLite ni se reinician bases existentes. El historial SQL se conserva solo como referencia de la version anterior.
 
-Usa `pnpm db:migrate` unicamente al crear una nueva migracion durante el desarrollo.
+Los UUID se guardan como cadenas en `_id`, conservando el campo `id` de la API. Las colecciones son `users`, `refresh_sessions`, `training_runs`, `training_checkpoints` y `generation_metrics`. Configuracion, genoma y snapshot son objetos BSON embebidos; el historial creciente utiliza referencias. Las salas multijugador siguen en memoria. Los cinco ejemplos JSON completos y enlazados estan en [docs/mongodb-examples.json](docs/mongodb-examples.json); usan una poblacion tecnica reducida de dos pilotos para mostrar todo el snapshot sin omisiones (la interfaz normal usa 24).
+
+Las pruebas e2e levantan y destruyen un replica set local exclusivo con `mongodb-memory-server`; no usan la base configurada en `.env`. La primera ejecucion descarga el binario oficial de MongoDB.
 
 ## Ejecucion
 

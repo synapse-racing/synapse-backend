@@ -31,7 +31,13 @@ export class AppService {
 
   async getReadiness(): Promise<ReadinessStatus> {
     try {
-      await this.prisma.$queryRawUnsafe('SELECT 1');
+      const hello = await this.prisma.$runCommandRaw({ hello: 1 });
+      if (
+        typeof hello.setName !== 'string' ||
+        hello.isWritablePrimary !== true
+      ) {
+        throw new Error('MongoDB must be a writable replica set member');
+      }
     } catch {
       throw new ServiceUnavailableException('Database is not ready');
     }
