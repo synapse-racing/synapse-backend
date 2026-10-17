@@ -3,12 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id           String           @id @default(uuid())
+  id           String           @id @default(uuid()) @map("_id")
   email        String           @unique
   username     String           @unique
   passwordHash String
@@ -16,6 +16,8 @@ model User {
   updatedAt    DateTime         @updatedAt
   sessions     RefreshSession[]
   trainingRuns TrainingRun[]
+
+  @@map("users")
 }
 
 enum TrainingStatus {
@@ -25,7 +27,7 @@ enum TrainingStatus {
 }
 
 model TrainingRun {
-  id                String               @id @default(uuid())
+  id                String               @id @default(uuid()) @map("_id")
   userId            String
   name              String
   status            TrainingStatus       @default(PAUSED)
@@ -38,26 +40,28 @@ model TrainingRun {
   updatedAt         DateTime             @updatedAt
   startedAt         DateTime?
   finishedAt        DateTime?
-  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User                 @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   checkpoints       TrainingCheckpoint[]
   metrics           GenerationMetric[]
 
   @@index([userId, updatedAt])
+  @@map("training_runs")
 }
 
 model TrainingCheckpoint {
-  id            String      @id @default(uuid())
+  id            String      @id @default(uuid()) @map("_id")
   trainingRunId String
   generation    Int
   snapshot      Json
   createdAt     DateTime    @default(now())
-  trainingRun   TrainingRun @relation(fields: [trainingRunId], references: [id], onDelete: Cascade)
+  trainingRun   TrainingRun @relation(fields: [trainingRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([trainingRunId, generation])
+  @@map("training_checkpoints")
 }
 
 model GenerationMetric {
-  id             String      @id @default(uuid())
+  id             String      @id @default(uuid()) @map("_id")
   trainingRunId  String
   generation     Int
   bestFitness    Float
@@ -65,21 +69,22 @@ model GenerationMetric {
   speciesCount   Int
   durationMs     Int
   createdAt      DateTime    @default(now())
-  trainingRun    TrainingRun @relation(fields: [trainingRunId], references: [id], onDelete: Cascade)
+  trainingRun    TrainingRun @relation(fields: [trainingRunId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([trainingRunId, generation])
-  @@index([trainingRunId, generation])
+  @@map("generation_metrics")
 }
 
 model RefreshSession {
-  id        String    @id @default(uuid())
+  id        String    @id @default(uuid()) @map("_id")
   userId    String
   tokenHash String
   expiresAt DateTime
   revokedAt DateTime?
   createdAt DateTime  @default(now())
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([userId])
   @@index([expiresAt])
+  @@map("refresh_sessions")
 }

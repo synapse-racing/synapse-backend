@@ -132,7 +132,7 @@ export class AuthService {
     const tokenHash = await argon2.hash(refreshToken, {
       type: argon2.argon2id,
     });
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.transaction(async (tx) => {
       const now = new Date();
       if (previousSessionId) {
         const revoked = await tx.refreshSession.updateMany({
@@ -148,7 +148,13 @@ export class AuthService {
           throw new UnauthorizedException('Invalid session');
       }
       await tx.refreshSession.create({
-        data: { id: sessionId, userId: user.id, tokenHash, expiresAt },
+        data: {
+          id: sessionId,
+          userId: user.id,
+          tokenHash,
+          expiresAt,
+          revokedAt: null,
+        },
       });
     });
 
