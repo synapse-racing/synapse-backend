@@ -1,31 +1,43 @@
-const { spawnSync } = require('node:child_process');
-const fs = require('node:fs');
+const { spawn } = require('node:child_process');
 const path = require('node:path');
+const { MongoMemoryReplSet } = require('mongodb-memory-server');
 
-const directory = fs.mkdtempSync(path.resolve(__dirname, '../prisma/.test-'));
-fs.closeSync(fs.openSync(path.join(directory, 'test.db'), 'wx'));
-const databaseUrl = 'file:./' + path.basename(directory) + '/test.db';
-const options = {
-  cwd: path.resolve(__dirname, '..'),
-  env: {
-    ...process.env,
-    DATABASE_URL: databaseUrl,
-    SYNAPSE_TEST_DATABASE_URL: databaseUrl,
-  },
-  stdio: 'inherit',
-};
+function run(args, options) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, options);
+    child.once('error', reject);
+    child.once('close', (code) => resolve(code ?? 1));
+  });
+}
 
-try {
-  const migration = spawnSync(
-    process.execPath,
-    [require.resolve('prisma/build/index.js'), 'migrate', 'deploy'],
-    options,
-  );
-  if (migration.status !== 0) {
-    process.exitCode = migration.status ?? 1;
-  } else {
-    const tests = spawnSync(
-      process.execPath,
+async function main() {
+  // Always use a private local replica set, never DATABASE_URL from .env.
+  const replica = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  try {
+    const databaseUrl = replica.getUri('synapse_e2e');
+    const options = {
+      cwd: path.resolve(__dirname, '..'),
+      env: {
+        ...process.env,
+        DATABASE_URL: databaseUrl,
+        SYNAPSE_TEST_DATABASE_URL: databaseUrl,
+      },
+      stdio: 'inherit',
+    };
+    const schema = await run(
+      [
+        require.resolve('prisma/build/index.js'),
+        'db',
+        'push',
+        '--skip-generate',
+      ],
+      options,
+    );
+    if (schema !== 0) {
+      process.exitCode = schema;
+      return;
+    }
+    const tests = await run(
       [
         require.resolve('jest/bin/jest'),
         '--config',
@@ -34,8 +46,12 @@ try {
       ],
       options,
     );
-    process.exitCode = tests.status ?? 1;
+    process.exitCode = tests;
+  } finally {
+    await replica.stop();
   }
-} finally {
-  fs.rmSync(directory, { recursive: true, force: true });
 }
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

@@ -1,84 +1,36 @@
-# Despliegue de produccion
+# Despliegue con MongoDB
 
-## Topologia
+El backend requiere MongoDB con replica set para guardar checkpoint, metrica y resumen en una transaccion y rotar sesiones de forma consistente. La migracion empieza con una base vacia; no importa SQLite.
 
-`compose.prod.yaml` inicia NestJS con SQLite y el frontend Nginx. Solo Nginx publica un puerto; `/api` y `/socket.io` se envian al backend por la red interna.
+## Variables
 
-El archivo Compose espera que `synapse-backend` y `synapse-frontend` sean directorios hermanos:
-
-```text
-workspace/
-  synapse-backend/
-  synapse-frontend/
-```
-
-## Configuracion
-
-Desde `synapse-backend`, crea el archivo de entorno fuera del control de versiones:
-
-```bash
-cp .env.production.example .env.production
-```
-
-Reemplaza todos los valores de ejemplo. SQLite se guarda en `/app/data/synapse.db`, dentro del volumen `sqlite_data`. `PUBLIC_APP_URL` es el origen HTTPS publico sin ruta final.
-
-Variables obligatorias:
+Copia `.env.production.example` a `.env.production` (Compose) o configura `.env` (Pterodactyl). Define `DATABASE_URL`, secretos JWT distintos y el origen del frontend. No guardes credenciales en Git.
 
 ```text
-JWT_ACCESS_SECRET
-JWT_REFRESH_SECRET
-PUBLIC_APP_URL
+DATABASE_URL=mongodb://USER:PASSWORD@mongo.example.com:27017/synapse?authSource=admin&replicaSet=rs0&directConnection=true
 ```
 
-## Inicio y actualizacion
+Codifica usuario y clave como componentes URI. Ajusta `authSource` a la base donde se creo el usuario. Para produccion el usuario de la aplicacion necesita acceso a la base de Synapse y permiso para crear sus indices; no necesita administrar el replica set. `directConnection=true` sirve para un unico miembro detras de la asignacion de puertos de Pterodactyl. No ofrece conmutacion automatica entre nodos.
 
-Valida y arranca el stack:
+## Docker Compose
+
+`compose.yaml` incluye un replica set de desarrollo sin autenticacion, publicado solo en localhost. No expongas ese servicio de desarrollo a Internet. `compose.prod.yaml` usa tu MongoDB externo y publica solo el frontend.
 
 ```bash
 docker compose --env-file .env.production -f compose.prod.yaml config
 docker compose --env-file .env.production -f compose.prod.yaml up -d --build --wait
 ```
 
-El entrypoint del backend ejecuta `prisma migrate deploy` antes de cada inicio. Las migraciones son idempotentes; si una falla, el backend no arranca y conserva el archivo de base de datos.
+El entrypoint ejecuta `prisma db push --skip-generate`, sin `--accept-data-loss` ni reinicios de base. Si falla la preparacion de indices, no inicia la API. Cambios destructivos futuros requieren un procedimiento especifico revisado por separado.
 
-Comprueba el estado y los logs:
+## Pterodactyl del backend
 
-```bash
-docker compose --env-file .env.production -f compose.prod.yaml ps
-docker compose --env-file .env.production -f compose.prod.yaml logs backend
-curl --fail http://localhost/api/health/live
-curl --fail http://localhost/api/health/ready
-```
+Importa `deploy/pterodactyl/egg-synapse-mongodb.json`. Copia `start-pterodactyl.sh` a `/home/container/start-pterodactyl.sh`, sube codigo y lockfile, y configura `.env`. El script instala dependencias, genera Prisma, compila y prepara los indices antes de iniciar NestJS.
 
-## TLS
+Para habilitar el replica set del servidor de MongoDB consulta [PTERODACTYL-MONGODB.md](deploy/pterodactyl/PTERODACTYL-MONGODB.md). No ejecutes el backend nuevo contra un MongoDB standalone.
 
-Termina TLS en un balanceador o proxy externo y reenvia trafico HTTP a `APP_PORT`. Conserva `X-Forwarded-Proto` y configura `PUBLIC_APP_URL` con `https://`; Nest confia solo en el primer proxy. No publiques directamente el puerto del backend.
+## Verificacion y recuperacion
 
-## Backups
+Comprueba `/api/health/ready`, registro, login, guardado y recuperacion de una generacion. Las pruebas e2e usan una base temporal local y nunca tu servidor externo. Conserva el servidor y los datos SQLite anteriores hasta aprobar el cambio; volver al codigo previo permite seguir usando esa base.
 
-Deten el backend antes de copiar el contenido completo del volumen `sqlite_data` a un respaldo fuera del host. Para restaurar, manten el backend detenido, restaura esos archivos en el mismo volumen y vuelve a iniciarlo. No copies solo el archivo principal mientras hay escrituras activas.
-
-No uses `docker compose down --volumes` en produccion: elimina el volumen persistente.
-
-## Apagado
-
-```bash
-docker compose --env-file .env.production -f compose.prod.yaml down
-```
-
-Compose concede el periodo configurado para que NestJS cierre HTTP, Prisma y el intervalo multijugador. El volumen SQLite se conserva.
-
-## Pterodactyl
-
-Configura `DATABASE_URL=file:/home/container/data/synapse.db` en `.env`, junto con los secretos y el origen del frontend. Crea el directorio `data` antes de iniciar.
-
-```bash
-mkdir -p data
-touch data/synapse.db
-pnpm prisma:generate
-pnpm build
-pnpm db:deploy
-pnpm start:prod
-```
-
-Conserva `data` entre despliegues. Esta version usa una base SQLite vacia y no importa la base PostgreSQL anterior.
+Realiza backups con `mongodump` y comprueba la restauracion con `mongorestore` en una base aparte. Para respaldos consistentes con escrituras concurrentes usa el procedimiento de backup del replica set y su oplog. Un replica set de un nodo permite transacciones, pero no aporta redundancia. Termina TLS en el proxy del frontend y protege la conexion a MongoDB con TLS o una red privada segun tu infraestructura.

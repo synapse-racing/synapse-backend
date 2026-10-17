@@ -5,6 +5,7 @@ import { AppModule } from './../src/app.module';
 import { configureApp } from './../src/app.setup';
 import { PrismaService } from './../src/infrastructure/database/prisma.service';
 import { io, type Socket } from 'socket.io-client';
+import { TrainingService } from '../src/modules/training/application/training.service';
 
 interface AuthBody {
   accessToken: string;
@@ -60,6 +61,9 @@ describe('AppController (e2e)', () => {
     configureApp(app);
     await app.init();
     prisma = app.get(PrismaService);
+    await prisma.trainingCheckpoint.deleteMany();
+    await prisma.generationMetric.deleteMany();
+    await prisma.trainingRun.deleteMany();
     await prisma.refreshSession.deleteMany();
     await prisma.user.deleteMany();
   });
@@ -429,6 +433,134 @@ describe('AppController (e2e)', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .expect(200)
       .expect([]);
+  });
+
+  it('allows only one concurrent rotation of the same refresh token', async () => {
+    const server = app.getHttpServer();
+    const registration = await request(server)
+      .post('/api/auth/register')
+      .send({
+        email: 'rotation@example.com',
+        username: 'rotation_driver',
+        password: 'secure-pass-123',
+      })
+      .expect(201);
+    const cookie = (registration.headers['set-cookie'] as string[])[0].split(
+      ';',
+    )[0];
+    const results = await Promise.all([
+      request(server).post('/api/auth/refresh').set('Cookie', cookie),
+      request(server).post('/api/auth/refresh').set('Cookie', cookie),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual([200, 401]);
+    expect(
+      await prisma.refreshSession.count({ where: { revokedAt: null } }),
+    ).toBe(1);
+  });
+
+  it('keeps generation and best fitness when checkpoints arrive concurrently', async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: 'checkpoint@example.com',
+        username: 'checkpoint_driver',
+        passwordHash: 'test-hash',
+      },
+    });
+    const run = await prisma.trainingRun.create({
+      data: {
+        userId: user.id,
+        name: 'Concurrent history',
+        seed: 42,
+        config: { populationSize: 24 },
+      },
+    });
+    const service = app.get(TrainingService);
+    const input = (generation: number, fitness: number) => ({
+      generation,
+      snapshot: { version: 1, generation },
+      bestGenome: { id: `best-${generation}` },
+      bestFitness: fitness,
+      averageFitness: 5,
+      speciesCount: 2,
+      durationMs: 1000,
+    });
+    await Promise.all([
+      service.saveCheckpoint(user.id, run.id, input(3, 1300)),
+      service.saveCheckpoint(user.id, run.id, input(2, 900)),
+    ]);
+    const saved = await prisma.trainingRun.findUniqueOrThrow({
+      where: { id: run.id },
+    });
+    expect(saved.currentGeneration).toBe(3);
+    expect(saved.bestFitness).toBe(1300);
+    expect(saved.bestGenome).toEqual({ id: 'best-3' });
+    expect(
+      await prisma.generationMetric.count({ where: { trainingRunId: run.id } }),
+    ).toBe(2);
+  });
+
+  it('stores BSON documents and atomically removes the training history', async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: 'mongo@example.com',
+        username: 'mongo_driver',
+        passwordHash: 'test-hash',
+      },
+    });
+    const run = await prisma.trainingRun.create({
+      data: {
+        userId: user.id,
+        name: 'Mongo history',
+        seed: 42,
+        config: { populationSize: 24 },
+      },
+    });
+    await prisma.trainingCheckpoint.create({
+      data: {
+        trainingRunId: run.id,
+        generation: 1,
+        snapshot: { version: 1, genomes: [] },
+      },
+    });
+    await prisma.generationMetric.create({
+      data: {
+        trainingRunId: run.id,
+        generation: 1,
+        bestFitness: 12.5,
+        averageFitness: 5.25,
+        speciesCount: 2,
+        durationMs: 1000,
+      },
+    });
+    const raw = await prisma.$runCommandRaw({
+      aggregate: 'training_runs',
+      pipeline: [
+        { $match: { _id: run.id } },
+        {
+          $project: {
+            _id: 1,
+            idType: { $type: '$_id' },
+            dateType: { $type: '$createdAt' },
+            configType: { $type: '$config' },
+          },
+        },
+      ],
+      cursor: {},
+    });
+    expect((raw.cursor as { firstBatch: unknown[] }).firstBatch).toEqual([
+      { _id: run.id, idType: 'string', dateType: 'date', configType: 'object' },
+    ]);
+    const service = app.get(TrainingService);
+    await service.delete(user.id, run.id);
+    expect(
+      await prisma.trainingCheckpoint.count({
+        where: { trainingRunId: run.id },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.generationMetric.count({ where: { trainingRunId: run.id } }),
+    ).toBe(0);
+    expect(await prisma.trainingRun.count({ where: { id: run.id } })).toBe(0);
   });
 
   it('authenticates a websocket and creates a private room', async () => {

@@ -3,11 +3,9 @@ set -eu
 
 cd /home/container
 export CI=true
-export DATABASE_URL="${DATABASE_URL:-file:/home/container/data/synapse.db}"
 export PORT="${SERVER_PORT:-${PORT:-3000}}"
 
-mkdir -p /home/container/data
-touch /home/container/data/synapse.db
+# DATABASE_URL is read from .env by Prisma and NestJS.
 
 # VortexSpace may save its pnpm bootstrap as an application dependency.
 node <<'NODE'
@@ -34,8 +32,8 @@ node node_modules/prisma/build/index.js generate
 echo "Building backend..."
 node node_modules/@nestjs/cli/bin/nest.js build
 
-echo "Applying database migrations..."
-node node_modules/prisma/build/index.js migrate deploy
+echo "Preparing MongoDB indexes..."
+node node_modules/prisma/build/index.js db push --skip-generate
 
 export NODE_ENV=production
 echo "Starting Synapse backend..."

@@ -1,0 +1,619 @@
+{
+  "users": {
+    "_id": "0b95fb02-4461-4622-a136-2d972c6dccc5",
+    "email": "piloto18@example.com",
+    "username": "Piloto18",
+    "passwordHash": "$argon2id$v=19$m=65536,p=4,t=3$7J1ex6KBperj5ardwSOLyw$lewaCnCJ27lD756dElTgdYN7iYidAh38+j3vWZRzTuw",
+    "createdAt": {
+      "$date": "2026-10-17T20:00:00.000Z"
+    },
+    "updatedAt": {
+      "$date": "2026-10-17T20:00:00.000Z"
+    }
+  },
+  "refresh_sessions": {
+    "_id": "32844cd8-0c84-4c56-a4b2-dc6415a8f512",
+    "userId": "0b95fb02-4461-4622-a136-2d972c6dccc5",
+    "tokenHash": "$argon2id$v=19$m=65536,p=4,t=3$mCyqmnd13NJaqWg0BSkYTQ$LPUpnDwInj6SMDBlt2ZaEjc08h+S+OdXJPLZFX9n7eM",
+    "expiresAt": {
+      "$date": "2026-11-16T20:00:00.000Z"
+    },
+    "revokedAt": null,
+    "createdAt": {
+      "$date": "2026-10-17T20:00:00.000Z"
+    }
+  },
+  "training_runs": {
+    "_id": "bab76401-41e5-4537-a027-8e86641cf52d",
+    "userId": "0b95fb02-4461-4622-a136-2d972c6dccc5",
+    "name": "Ejemplo documental NEAT",
+    "status": "PAUSED",
+    "seed": 42170,
+    "currentGeneration": 1,
+    "bestFitness": 1250.0,
+    "config": {
+      "simulationVersion": "race-sim-v1",
+      "populationSize": 2,
+      "inputCount": 6,
+      "outputCount": 2,
+      "compatibilityThreshold": 3,
+      "crossoverRate": 0.75,
+      "weightMutationRate": 0.8,
+      "addConnectionRate": 0.08,
+      "addNodeRate": 0.04,
+      "toggleConnectionRate": 0.02,
+      "track": {
+        "version": "grand-prix-v3",
+        "seed": 42170
+      }
+    },
+    "bestGenome": {
+      "id": "genome-0",
+      "nodes": [
+        {
+          "id": 0,
+          "type": "input",
+          "layer": 0
+        },
+        {
+          "id": 1,
+          "type": "input",
+          "layer": 0
+        },
+        {
+          "id": 2,
+          "type": "input",
+          "layer": 0
+        },
+        {
+          "id": 3,
+          "type": "input",
+          "layer": 0
+        },
+        {
+          "id": 4,
+          "type": "input",
+          "layer": 0
+        },
+        {
+          "id": 5,
+          "type": "input",
+          "layer": 0
+        },
+        {
+          "id": 6,
+          "type": "bias",
+          "layer": 0
+        },
+        {
+          "id": 7,
+          "type": "output",
+          "layer": 1
+        },
+        {
+          "id": 8,
+          "type": "output",
+          "layer": 1
+        }
+      ],
+      "connections": [
+        {
+          "innovation": 0,
+          "source": 0,
+          "target": 7,
+          "weight": -0.17464486230164766,
+          "enabled": true
+        },
+        {
+          "innovation": 1,
+          "source": 0,
+          "target": 8,
+          "weight": 0.22187984827905893,
+          "enabled": true
+        },
+        {
+          "innovation": 2,
+          "source": 1,
+          "target": 7,
+          "weight": 0.5957249463535845,
+          "enabled": true
+        },
+        {
+          "innovation": 3,
+          "source": 1,
+          "target": 8,
+          "weight": -0.4202584126032889,
+          "enabled": true
+        },
+        {
+          "innovation": 4,
+          "source": 2,
+          "target": 7,
+          "weight": -0.2769014979712665,
+          "enabled": true
+        },
+        {
+          "innovation": 5,
+          "source": 2,
+          "target": 8,
+          "weight": 0.052843103650957346,
+          "enabled": true
+        },
+        {
+          "innovation": 6,
+          "source": 3,
+          "target": 7,
+          "weight": 0.5461308397352695,
+          "enabled": true
+        },
+        {
+          "innovation": 7,
+          "source": 3,
+          "target": 8,
+          "weight": 0.4841093886643648,
+          "enabled": true
+        },
+        {
+          "innovation": 8,
+          "source": 4,
+          "target": 7,
+          "weight": 0.9432076560333371,
+          "enabled": true
+        },
+        {
+          "innovation": 9,
+          "source": 4,
+          "target": 8,
+          "weight": 0.03448033705353737,
+          "enabled": true
+        },
+        {
+          "innovation": 10,
+          "source": 5,
+          "target": 7,
+          "weight": 0.17254713736474514,
+          "enabled": true
+        },
+        {
+          "innovation": 11,
+          "source": 5,
+          "target": 8,
+          "weight": -0.6655874056741595,
+          "enabled": true
+        },
+        {
+          "innovation": 12,
+          "source": 6,
+          "target": 7,
+          "weight": 0.19489631103351712,
+          "enabled": true
+        },
+        {
+          "innovation": 13,
+          "source": 6,
+          "target": 8,
+          "weight": 0.9733043848536909,
+          "enabled": true
+        }
+      ]
+    },
+    "createdAt": {
+      "$date": "2026-10-17T20:00:00.000Z"
+    },
+    "updatedAt": {
+      "$date": "2026-10-17T20:00:18.000Z"
+    },
+    "startedAt": {
+      "$date": "2026-10-17T20:00:00.000Z"
+    },
+    "finishedAt": null
+  },
+  "training_checkpoints": {
+    "_id": "5aff15cf-c7ae-4c41-b790-156c52bd048a",
+    "trainingRunId": "bab76401-41e5-4537-a027-8e86641cf52d",
+    "generation": 1,
+    "snapshot": {
+      "version": 1,
+      "seed": 42170,
+      "config": {
+        "simulationVersion": "race-sim-v1",
+        "populationSize": 2,
+        "inputCount": 6,
+        "outputCount": 2,
+        "compatibilityThreshold": 3,
+        "crossoverRate": 0.75,
+        "weightMutationRate": 0.8,
+        "addConnectionRate": 0.08,
+        "addNodeRate": 0.04,
+        "toggleConnectionRate": 0.02,
+        "track": {
+          "version": "grand-prix-v3",
+          "seed": 42170
+        }
+      },
+      "generation": 1,
+      "nextGenomeId": 4,
+      "randomState": 2959820629,
+      "innovations": {
+        "nextInnovation": 14,
+        "nextNode": 9,
+        "connections": [
+          [
+            "0->7",
+            0
+          ],
+          [
+            "0->8",
+            1
+          ],
+          [
+            "1->7",
+            2
+          ],
+          [
+            "1->8",
+            3
+          ],
+          [
+            "2->7",
+            4
+          ],
+          [
+            "2->8",
+            5
+          ],
+          [
+            "3->7",
+            6
+          ],
+          [
+            "3->8",
+            7
+          ],
+          [
+            "4->7",
+            8
+          ],
+          [
+            "4->8",
+            9
+          ],
+          [
+            "5->7",
+            10
+          ],
+          [
+            "5->8",
+            11
+          ],
+          [
+            "6->7",
+            12
+          ],
+          [
+            "6->8",
+            13
+          ]
+        ],
+        "splitNodes": []
+      },
+      "genomes": [
+        {
+          "id": "genome-2",
+          "nodes": [
+            {
+              "id": 0,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 1,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 2,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 3,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 4,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 5,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 6,
+              "type": "bias",
+              "layer": 0
+            },
+            {
+              "id": 7,
+              "type": "output",
+              "layer": 1
+            },
+            {
+              "id": 8,
+              "type": "output",
+              "layer": 1
+            }
+          ],
+          "connections": [
+            {
+              "innovation": 0,
+              "source": 0,
+              "target": 7,
+              "weight": -0.17464486230164766,
+              "enabled": true
+            },
+            {
+              "innovation": 1,
+              "source": 0,
+              "target": 8,
+              "weight": 0.22187984827905893,
+              "enabled": true
+            },
+            {
+              "innovation": 2,
+              "source": 1,
+              "target": 7,
+              "weight": 0.5957249463535845,
+              "enabled": true
+            },
+            {
+              "innovation": 3,
+              "source": 1,
+              "target": 8,
+              "weight": -0.4202584126032889,
+              "enabled": true
+            },
+            {
+              "innovation": 4,
+              "source": 2,
+              "target": 7,
+              "weight": -0.2769014979712665,
+              "enabled": true
+            },
+            {
+              "innovation": 5,
+              "source": 2,
+              "target": 8,
+              "weight": 0.052843103650957346,
+              "enabled": true
+            },
+            {
+              "innovation": 6,
+              "source": 3,
+              "target": 7,
+              "weight": 0.5461308397352695,
+              "enabled": true
+            },
+            {
+              "innovation": 7,
+              "source": 3,
+              "target": 8,
+              "weight": 0.4841093886643648,
+              "enabled": true
+            },
+            {
+              "innovation": 8,
+              "source": 4,
+              "target": 7,
+              "weight": 0.9432076560333371,
+              "enabled": true
+            },
+            {
+              "innovation": 9,
+              "source": 4,
+              "target": 8,
+              "weight": 0.03448033705353737,
+              "enabled": true
+            },
+            {
+              "innovation": 10,
+              "source": 5,
+              "target": 7,
+              "weight": 0.17254713736474514,
+              "enabled": true
+            },
+            {
+              "innovation": 11,
+              "source": 5,
+              "target": 8,
+              "weight": -0.6655874056741595,
+              "enabled": true
+            },
+            {
+              "innovation": 12,
+              "source": 6,
+              "target": 7,
+              "weight": 0.19489631103351712,
+              "enabled": true
+            },
+            {
+              "innovation": 13,
+              "source": 6,
+              "target": 8,
+              "weight": 0.9733043848536909,
+              "enabled": true
+            }
+          ]
+        },
+        {
+          "id": "genome-3",
+          "nodes": [
+            {
+              "id": 0,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 1,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 2,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 3,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 4,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 5,
+              "type": "input",
+              "layer": 0
+            },
+            {
+              "id": 6,
+              "type": "bias",
+              "layer": 0
+            },
+            {
+              "id": 7,
+              "type": "output",
+              "layer": 1
+            },
+            {
+              "id": 8,
+              "type": "output",
+              "layer": 1
+            }
+          ],
+          "connections": [
+            {
+              "innovation": 0,
+              "source": 0,
+              "target": 7,
+              "weight": -0.4585952623747289,
+              "enabled": true
+            },
+            {
+              "innovation": 1,
+              "source": 0,
+              "target": 8,
+              "weight": 0.3745771595276892,
+              "enabled": true
+            },
+            {
+              "innovation": 2,
+              "source": 1,
+              "target": 7,
+              "weight": 1.0119902077130973,
+              "enabled": true
+            },
+            {
+              "innovation": 3,
+              "source": 1,
+              "target": 8,
+              "weight": -0.5542923808097839,
+              "enabled": true
+            },
+            {
+              "innovation": 4,
+              "source": 2,
+              "target": 7,
+              "weight": -0.012039504246786237,
+              "enabled": true
+            },
+            {
+              "innovation": 5,
+              "source": 2,
+              "target": 8,
+              "weight": 0.5263372515328228,
+              "enabled": true
+            },
+            {
+              "innovation": 6,
+              "source": 3,
+              "target": 7,
+              "weight": -0.9993304829113185,
+              "enabled": true
+            },
+            {
+              "innovation": 7,
+              "source": 3,
+              "target": 8,
+              "weight": -0.3500525816343725,
+              "enabled": true
+            },
+            {
+              "innovation": 8,
+              "source": 4,
+              "target": 7,
+              "weight": 0.6373059421312064,
+              "enabled": true
+            },
+            {
+              "innovation": 9,
+              "source": 4,
+              "target": 8,
+              "weight": -0.008329704403877258,
+              "enabled": true
+            },
+            {
+              "innovation": 10,
+              "source": 5,
+              "target": 7,
+              "weight": 0.5980341457761824,
+              "enabled": true
+            },
+            {
+              "innovation": 11,
+              "source": 5,
+              "target": 8,
+              "weight": -0.5262103104032576,
+              "enabled": true
+            },
+            {
+              "innovation": 12,
+              "source": 6,
+              "target": 7,
+              "weight": 0.03139561717398465,
+              "enabled": true
+            },
+            {
+              "innovation": 13,
+              "source": 6,
+              "target": 8,
+              "weight": 1.0168832626659423,
+              "enabled": true
+            }
+          ]
+        }
+      ]
+    },
+    "createdAt": {
+      "$date": "2026-10-17T20:00:18.000Z"
+    }
+  },
+  "generation_metrics": {
+    "_id": "2ed15a81-33b9-436c-88e7-c06184b8a86c",
+    "trainingRunId": "bab76401-41e5-4537-a027-8e86641cf52d",
+    "generation": 1,
+    "bestFitness": 1250.0,
+    "averageFitness": 835.0,
+    "speciesCount": 1,
+    "durationMs": 18000,
+    "createdAt": {
+      "$date": "2026-10-17T20:00:18.000Z"
+    }
+  }
+}
