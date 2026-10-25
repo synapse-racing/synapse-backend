@@ -737,12 +737,14 @@ describe('AppController (e2e)', () => {
 
       const movingSnapshot = new Promise<{
         status: string;
+        startAt: number;
         players: Array<{ speed: number; z: number }>;
       }>((resolve) => {
         host.on(
           'race:snapshot',
           (snapshot: {
             status: string;
+            startAt: number;
             players: Array<{ speed: number; z: number }>;
           }) => {
             if (
@@ -756,6 +758,68 @@ describe('AppController (e2e)', () => {
       });
       const snapshot = await movingSnapshot;
       expect(snapshot.players.every((player) => player.z < 13)).toBe(true);
+      const denied = new Promise<{ code: string }>((resolve) =>
+        guest.once('server:error', resolve),
+      );
+      guest.emit('race:eliminate', {
+        userId: hostBody.user.id,
+        startAt: snapshot.startAt,
+      });
+      expect((await denied).code).toBe('HOST_REQUIRED');
+      const eliminated = Promise.all(
+        [host, guest].map(
+          (socket) =>
+            new Promise<void>((resolve) => {
+              socket.on(
+                'race:snapshot',
+                (state: {
+                  players: Array<{
+                    userId: string;
+                    eliminated: boolean;
+                    eliminationReason: string | null;
+                  }>;
+                }) => {
+                  if (
+                    state.players.some(
+                      (player) =>
+                        player.userId === guestBody.user.id &&
+                        player.eliminated &&
+                        player.eliminationReason === 'HOST',
+                    )
+                  )
+                    resolve();
+                },
+              );
+            }),
+        ),
+      );
+      host.emit('race:eliminate', {
+        userId: guestBody.user.id,
+        startAt: snapshot.startAt,
+      });
+      await eliminated;
+      const finished = new Promise<{
+        players: Array<{ userId: string; eliminationReason: string | null }>;
+      }>((resolve) => host.once('race:finish', resolve));
+      const returned = new Promise<void>((resolve) =>
+        host.on(
+          'room:state',
+          (state: { status: string; players: unknown[] }) => {
+            if (state.status === 'LOBBY' && state.players.length === 2)
+              resolve();
+          },
+        ),
+      );
+      host.emit('race:eliminate', {
+        userId: hostBody.user.id,
+        startAt: snapshot.startAt,
+      });
+      expect(
+        (await finished).players.every(
+          (player) => player.eliminationReason === 'HOST',
+        ),
+      ).toBe(true);
+      await returned;
     } finally {
       host.disconnect();
       guest.disconnect();

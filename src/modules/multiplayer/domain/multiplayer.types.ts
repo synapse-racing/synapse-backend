@@ -2,7 +2,7 @@ import type { NeatGenome } from './neat-controller';
 import type { TrackRecipe } from './track';
 
 export type RoomStatus = 'LOBBY' | 'COUNTDOWN' | 'RACING' | 'FINISHED';
-export type EliminationReason = 'COLLISION' | 'STALLED';
+export type EliminationReason = 'COLLISION' | 'STALLED' | 'HOST';
 
 export interface RaceInput {
   sequence: number;
