@@ -24,6 +24,7 @@ import { AccessTokenGuard } from '../../auth/infrastructure/access-token.guard';
 import { CurrentUser } from '../../auth/presentation/current-user.decorator';
 import type { PublicUser } from '../../users/users.service';
 import { TrainingService } from '../application/training.service';
+import { ImportGuestTrainingDto } from './dto/import-guest-training.dto';
 import { CreateTrainingRunDto } from './dto/create-training-run.dto';
 import { SaveCheckpointDto } from './dto/save-checkpoint.dto';
 import { UpdateTrainingStatusDto } from './dto/update-training-status.dto';
@@ -41,6 +42,21 @@ export class TrainingController {
   @ApiCreatedResponse({ description: 'Training run created' })
   create(@CurrentUser() user: PublicUser, @Body() input: CreateTrainingRunDto) {
     return this.trainingService.create(user.id, input);
+  }
+
+  @Post('import-guest')
+  @ApiOperation({
+    summary:
+      'Import a local guest training once per account, including its checkpoint and metrics',
+  })
+  @ApiCreatedResponse({
+    description: 'Imported training, or the existing import on retry',
+  })
+  importGuest(
+    @CurrentUser() user: PublicUser,
+    @Body() input: ImportGuestTrainingDto,
+  ) {
+    return this.trainingService.importGuest(user.id, input);
   }
 
   @Get()
