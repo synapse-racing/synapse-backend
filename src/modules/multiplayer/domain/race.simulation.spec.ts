@@ -219,3 +219,68 @@ it.each([-1, 1])(
     expect(race.tick(race.startAt + 50, 4).players).toEqual(snapshot.players);
   },
 );
+
+describe('host elimination', () => {
+  it('stops only an active target, ignores duplicate orders and finishes when none remain', () => {
+    const race = new RaceSimulation(
+      [
+        { userId: 'host', username: 'Host' },
+        { userId: 'guest', username: 'Guest' },
+      ],
+      0,
+    );
+    expect(race.eliminate('guest')).toBe(false);
+    race.submitInput('host', { sequence: 1, steering: 0, throttle: 1 });
+    race.submitInput('guest', { sequence: 1, steering: 0, throttle: 1 });
+    const first = race.tick(race.startAt);
+    expect(race.eliminate('unknown', 3000)).toBe(false);
+    expect(race.eliminate('guest', 3000)).toBe(true);
+    expect(race.eliminate('guest', 3000)).toBe(true);
+    expect(
+      race.submitInput('guest', { sequence: 2, steering: 1, throttle: 1 }),
+    ).toBe(false);
+    const after = race.tick(3050);
+    const guest = after.players.find((p) => p.userId === 'guest')!;
+    expect(guest).toMatchObject({
+      x: first.players[1].x,
+      z: first.players[1].z,
+      speed: 0,
+      eliminated: true,
+      eliminationReason: 'HOST',
+      disconnected: false,
+    });
+    expect(after.status).toBe('RACING');
+    expect(race.eliminate('host', 3060)).toBe(true);
+    expect(race.result()).toMatchObject({ finishedAt: 3060 });
+    expect(race.tick(3100).status).toBe('FINISHED');
+  });
+
+  it('does not eliminate disconnected or completed competitors', () => {
+    const track = generateTrack({ version: 'rectangular-ring-v1', seed: 0 });
+    const race = new RaceSimulation(
+      [{ userId: 'pilot', username: 'Pilot' }],
+      0,
+      {
+        ...track,
+        checkpoints: [
+          {
+            x: track.spawn.x,
+            z: track.spawn.z,
+            yaw: 0,
+            halfWidth: 4,
+            halfDepth: 4,
+          },
+        ],
+      },
+    );
+    expect(race.tick(3000).players[0].finishedAt).not.toBeNull();
+    expect(race.eliminate('pilot', 3050)).toBe(false);
+    const disconnected = new RaceSimulation(
+      [{ userId: 'pilot', username: 'Pilot' }],
+      0,
+    );
+    disconnected.tick(3000);
+    disconnected.disconnect('pilot');
+    expect(disconnected.eliminate('pilot', 3050)).toBe(false);
+  });
+});
