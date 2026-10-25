@@ -762,6 +762,109 @@ describe('AppController (e2e)', () => {
     }
   }, 15_000);
 
+  it('imports guest progress once per account, including concurrent retries', async () => {
+    const server = app.getHttpServer();
+    const first = await request(server)
+      .post('/api/auth/register')
+      .send({
+        email: 'import@example.com',
+        username: 'import_driver',
+        password: 'secure-pass-123',
+      })
+      .expect(201);
+    const second = await request(server)
+      .post('/api/auth/register')
+      .send({
+        email: 'import-other@example.com',
+        username: 'import_other',
+        password: 'secure-pass-123',
+      })
+      .expect(201);
+    const token = (first.body as AuthBody).accessToken;
+    const otherToken = (second.body as AuthBody).accessToken;
+    const config = {
+      populationSize: 1,
+      inputCount: 6,
+      outputCount: 2,
+      simulationVersion: 'race-sim-v1',
+      track: { version: 'grand-prix-v3', seed: 42 },
+    };
+    const input = {
+      sourceId: '62ab591f-6c11-4fa9-bbf2-410a973ad331',
+      name: 'Guest progress',
+      seed: 42,
+      config,
+      generation: 1,
+      snapshot: {
+        version: 1,
+        seed: 42,
+        generation: 1,
+        config,
+        genomes: [autonomousGenome],
+      },
+      bestGenome: autonomousGenome,
+      bestFitness: 100,
+      metrics: [
+        {
+          generation: 1,
+          bestFitness: 100,
+          averageFitness: 50,
+          speciesCount: 1,
+          durationMs: 2000,
+        },
+      ],
+    };
+    await request(server)
+      .post('/api/training-runs/import-guest')
+      .send(input)
+      .expect(401);
+    const attempts = await Promise.all(
+      [0, 1].map(() =>
+        request(server)
+          .post('/api/training-runs/import-guest')
+          .set('Authorization', 'Bearer ' + token)
+          .send(input),
+      ),
+    );
+    expect(attempts.map((r) => r.status)).toEqual([201, 201]);
+    const run = attempts[0].body as TrainingRunBody;
+    expect((attempts[1].body as TrainingRunBody).id).toBe(run.id);
+    expect(run.currentGeneration).toBe(1);
+    expect(await prisma.trainingRun.count()).toBe(1);
+    expect(await prisma.generationMetric.count()).toBe(1);
+    expect(await prisma.trainingCheckpoint.count()).toBe(1);
+    await request(server)
+      .get('/api/training-runs/' + run.id + '/checkpoints/latest')
+      .set('Authorization', 'Bearer ' + token)
+      .expect(200)
+      .expect((r) => {
+        expect((r.body as { snapshot: unknown }).snapshot).toEqual(
+          input.snapshot,
+        );
+      });
+    await request(server)
+      .post('/api/training-runs/import-guest')
+      .set('Authorization', 'Bearer ' + token)
+      .send(input)
+      .expect(201);
+    await request(server)
+      .get('/api/training-runs/' + run.id)
+      .set('Authorization', 'Bearer ' + otherToken)
+      .expect(404);
+    const other = await request(server)
+      .post('/api/training-runs/import-guest')
+      .set('Authorization', 'Bearer ' + otherToken)
+      .send(input)
+      .expect(201);
+    expect((other.body as TrainingRunBody).id).not.toBe(run.id);
+    await request(server)
+      .post('/api/training-runs/import-guest')
+      .set('Authorization', 'Bearer ' + token)
+      .send({ ...input, metrics: [...input.metrics, ...input.metrics] })
+      .expect(400);
+    expect(await prisma.trainingRun.count()).toBe(2);
+  });
+
   afterEach(async () => {
     await app.close();
   });

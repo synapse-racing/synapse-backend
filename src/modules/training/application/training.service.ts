@@ -3,6 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { ImportGuestTrainingDto } from '../presentation/dto/import-guest-training.dto';
 import { Prisma, TrainingStatus } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { CreateTrainingRunDto } from '../presentation/dto/create-training-run.dto';
@@ -38,6 +41,89 @@ export class TrainingService {
       },
       select: trainingSummarySelect,
     });
+  }
+
+  async importGuest(userId: string, input: ImportGuestTrainingDto) {
+    if (
+      input.snapshot.version !== 1 ||
+      input.snapshot.generation !== input.generation ||
+      input.snapshot.seed !== input.seed ||
+      !Array.isArray(input.snapshot.genomes) ||
+      !input.snapshot.genomes.length ||
+      !isDeepStrictEqual(input.snapshot.config, input.config) ||
+      input.snapshot.genomes.length !== input.config.populationSize
+    ) {
+      throw new BadRequestException('Invalid guest training snapshot');
+    }
+    if (
+      new Set(input.metrics.map((m) => m.generation)).size !==
+        input.metrics.length ||
+      input.metrics.some((m) => m.generation > input.generation)
+    ) {
+      throw new BadRequestException('Invalid guest generation metrics');
+    }
+    parseTrackRecipe(input.config.track);
+    const hash = createHash('sha256')
+      .update(JSON.stringify([userId, input.sourceId]))
+      .digest('hex');
+    const id =
+      hash.slice(0, 8) +
+      '-' +
+      hash.slice(8, 12) +
+      '-4' +
+      hash.slice(13, 16) +
+      '-a' +
+      hash.slice(17, 20) +
+      '-' +
+      hash.slice(20, 32);
+    try {
+      return await this.prisma.transaction(async (tx) => {
+        const existing = await tx.trainingRun.findFirst({
+          where: { id, userId },
+          select: trainingSummarySelect,
+        });
+        if (existing) return existing;
+        const run = await tx.trainingRun.create({
+          data: {
+            id,
+            userId,
+            name: input.name.trim(),
+            seed: input.seed,
+            config: input.config as Prisma.InputJsonValue,
+            currentGeneration: input.generation,
+            bestFitness: input.bestFitness,
+            ...(input.bestGenome
+              ? { bestGenome: input.bestGenome as Prisma.InputJsonValue }
+              : {}),
+          },
+          select: trainingSummarySelect,
+        });
+        await tx.trainingCheckpoint.create({
+          data: {
+            trainingRunId: id,
+            generation: input.generation,
+            snapshot: input.snapshot as Prisma.InputJsonValue,
+          },
+        });
+        if (input.metrics.length)
+          await tx.generationMetric.createMany({
+            data: input.metrics.map((m) => ({ ...m, trainingRunId: id })),
+          });
+        return run;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const imported = await this.prisma.trainingRun.findFirst({
+          where: { id, userId },
+          select: trainingSummarySelect,
+        });
+        if (imported) return imported;
+      }
+      throw error;
+    }
   }
 
   list(userId: string) {
