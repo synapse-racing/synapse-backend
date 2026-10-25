@@ -223,3 +223,86 @@ it.each([0, 1, 65, 2.5, NaN, Infinity])(
     );
   },
 );
+
+describe('host car controls', () => {
+  function readyRoom(count = 2) {
+    const service = new RoomService();
+    const room = service.create(
+      { id: 'host', username: 'Host' },
+      'host',
+      count,
+    );
+    for (let index = 1; index < count; index++)
+      service.join(
+        room.code,
+        { id: 'guest' + index, username: 'Guest' },
+        'guest' + index,
+      );
+    for (const socket of [
+      'host',
+      ...Array.from({ length: count - 1 }, (_, i) => 'guest' + (i + 1)),
+    ]) {
+      service.selectGenome(socket, genome, 'Pilot');
+      service.setReady(socket, true);
+    }
+    const { startAt } = service.start('host', 1000);
+    return { service, startAt };
+  }
+
+  it('validates host, membership, race identity and preserves players for a rematch', () => {
+    const { service, startAt } = readyRoom();
+    expectRoomError(
+      () => service.eliminateCar('host', 'guest1', startAt),
+      'INVALID_STATE',
+    );
+    service.tick(startAt);
+    expectRoomError(
+      () => service.eliminateCar('guest1', 'host', startAt),
+      'HOST_REQUIRED',
+    );
+    expectRoomError(
+      () => service.eliminateCar('outsider', 'host', startAt),
+      'NOT_IN_ROOM',
+    );
+    expectRoomError(
+      () => service.eliminateCar('host', 'outsider', startAt),
+      'PLAYER_NOT_ACTIVE',
+    );
+    expectRoomError(
+      () => service.eliminateCar('host', 'guest1', startAt - 1),
+      'STALE_RACE',
+    );
+    service.eliminateCar('host', 'guest1', startAt);
+    service.eliminateCar('host', 'guest1', startAt);
+    const update = service.tick(startAt + 50)[0];
+    expect(
+      update.snapshot.players.find((p) => p.userId === 'guest1')
+        ?.eliminationReason,
+    ).toBe('HOST');
+    expect(update.state.players).toHaveLength(2);
+    service.eliminateCar('host', 'host', startAt);
+    const finished = service.tick(startAt + 100)[0];
+    expect(finished.snapshot.status).toBe('FINISHED');
+    expect(finished.result).not.toBeNull();
+    expect(finished.state.status).toBe('LOBBY');
+    for (const socket of ['host', 'guest1']) service.setReady(socket, true);
+    const rematch = service.start('host', 5000);
+    service.tick(rematch.startAt);
+    expectRoomError(
+      () => service.eliminateCar('host', 'guest1', startAt),
+      'STALE_RACE',
+    );
+  });
+
+  it('transfers elimination permissions to the new host during a race', () => {
+    const { service, startAt } = readyRoom(3);
+    service.tick(startAt);
+    expect(service.leave('host')?.state?.hostUserId).toBe('guest1');
+    service.eliminateCar('guest1', 'guest2', startAt);
+    expect(
+      service
+        .tick(startAt + 50)[0]
+        .snapshot.players.find((p) => p.userId === 'guest2')?.eliminationReason,
+    ).toBe('HOST');
+  });
+});

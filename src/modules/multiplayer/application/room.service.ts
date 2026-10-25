@@ -238,6 +238,31 @@ export class RoomService {
     return this.publicState(room);
   }
 
+  eliminateCar(socketId: string, targetUserId: string, startAt: number): void {
+    const { room, player } = this.requireMembership(socketId);
+    if (room.hostUserId !== player.userId) {
+      throw new RoomError(
+        'HOST_REQUIRED',
+        'Solo el anfitrión puede eliminar autos',
+      );
+    }
+    if (room.status !== 'RACING' || !room.race) {
+      throw new RoomError(
+        'INVALID_STATE',
+        'Solo puedes eliminar autos durante la carrera',
+      );
+    }
+    if (room.race.startAt !== startAt) {
+      throw new RoomError('STALE_RACE', 'Esta acción pertenece a otra carrera');
+    }
+    if (!room.players.has(targetUserId) || !room.race.eliminate(targetUserId)) {
+      throw new RoomError(
+        'PLAYER_NOT_ACTIVE',
+        'Este auto ya no está activo en la carrera',
+      );
+    }
+  }
+
   submitInput(socketId: string, input: RaceInput): boolean {
     const { room, player } = this.requireMembership(socketId);
     if (!room.race) return false;

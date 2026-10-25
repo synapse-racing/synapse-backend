@@ -61,7 +61,13 @@ export class RaceSimulation {
 
   submitInput(userId: string, input: RaceInput): boolean {
     const player = this.players.get(userId);
-    if (!player || player.finishedAt || player.disconnected) return false;
+    if (
+      !player ||
+      player.finishedAt ||
+      player.disconnected ||
+      player.eliminated
+    )
+      return false;
     if (
       !Number.isInteger(input.sequence) ||
       input.sequence <= player.input.sequence
@@ -83,6 +89,32 @@ export class RaceSimulation {
   disconnect(userId: string): void {
     const player = this.players.get(userId);
     if (player) player.disconnected = true;
+  }
+
+  eliminate(userId: string, now = Date.now()): boolean {
+    const player = this.players.get(userId);
+    if (player?.eliminated && player.eliminationReason === 'HOST') return true;
+    if (
+      this.status !== 'RACING' ||
+      !player ||
+      player.finishedAt !== null ||
+      player.disconnected ||
+      player.eliminated
+    )
+      return false;
+    player.eliminated = true;
+    player.eliminationReason = 'HOST';
+    player.speed = 0;
+    if (
+      [...this.players.values()].every(
+        (p) => p.eliminated || p.finishedAt !== null || p.disconnected,
+      )
+    ) {
+      this.status = 'FINISHED';
+      this.finishedAt = now;
+    }
+    this.updateRanks();
+    return true;
   }
 
   tick(now = Date.now(), timeScale = 1): RaceSnapshot {
