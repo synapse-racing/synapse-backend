@@ -5,6 +5,11 @@ import { AppModule } from './../src/app.module';
 import { configureApp } from './../src/app.setup';
 import { PrismaService } from './../src/infrastructure/database/prisma.service';
 import { io, type Socket } from 'socket.io-client';
+import {
+  defaultAppearance,
+  type AppearanceProfile,
+  type VehicleAppearance,
+} from '../src/modules/garage/domain/vehicle-appearance';
 import { TrainingService } from '../src/modules/training/application/training.service';
 
 interface AuthBody {
@@ -86,6 +91,89 @@ describe('AppController (e2e)', () => {
             .database,
         ).toBe('up');
       });
+  });
+
+  it('validates and persists private vehicle appearance profiles', async () => {
+    const server = app.getHttpServer();
+    const first = await request(server)
+      .post('/api/auth/register')
+      .send({
+        email: 'garage@example.com',
+        username: 'garage_driver',
+        password: 'secure-pass-123',
+      })
+      .expect(201);
+    const second = await request(server)
+      .post('/api/auth/register')
+      .send({
+        email: 'garage-other@example.com',
+        username: 'garage_other',
+        password: 'secure-pass-123',
+      })
+      .expect(201);
+    const account = first.body as AuthBody;
+    const token = 'Bearer ' + account.accessToken;
+    const route = '/api/users/me/appearance';
+    await request(server).get(route).expect(401);
+    await request(server).patch(route).send(defaultAppearance).expect(401);
+    await request(server)
+      .get(route)
+      .set('Authorization', token)
+      .expect(200)
+      .expect({ appearance: defaultAppearance, customized: false });
+    await prisma.user.update({
+      where: { id: account.user.id },
+      data: { appearance: { modelId: 'retired-model' } },
+    });
+    await request(server)
+      .get(route)
+      .set('Authorization', token)
+      .expect(200)
+      .expect({ appearance: defaultAppearance, customized: false });
+    const custom: VehicleAppearance = {
+      ...defaultAppearance,
+      modelId: 'prototype',
+      primaryColor: '#AABBCC',
+      rimColor: '#222222',
+      livery: 'stripe',
+      finish: 'metallic',
+      number: 23,
+    };
+    for (const input of [
+      { ...custom, modelId: 'https://external.test/car.glb' },
+      { ...custom, primaryColor: 'red' },
+      { ...custom, finish: 'chrome' },
+      { ...custom, number: 100 },
+      { ...custom, number: 1.5 },
+      { ...custom, userId: (second.body as AuthBody).user.id },
+      { modelId: 'formula' },
+    ])
+      await request(server)
+        .patch(route)
+        .set('Authorization', token)
+        .send(input)
+        .expect(400);
+    const saved = await request(server)
+      .patch(route)
+      .set('Authorization', token)
+      .send(custom)
+      .expect(200);
+    const expected = { ...custom, primaryColor: '#aabbcc' };
+    expect((saved.body as AppearanceProfile).appearance).toEqual(expected);
+    await request(server)
+      .get(route)
+      .set('Authorization', token)
+      .expect(200)
+      .expect({ appearance: expected, customized: true });
+    await request(server)
+      .get(route)
+      .set('Authorization', 'Bearer ' + (second.body as AuthBody).accessToken)
+      .expect(200)
+      .expect({ appearance: defaultAppearance, customized: false });
+    expect(
+      (await prisma.user.findUniqueOrThrow({ where: { id: account.user.id } }))
+        .appearance,
+    ).toEqual(expected);
   });
 
   it('registers, authenticates, rotates and revokes a session', async () => {
@@ -620,6 +708,21 @@ describe('AppController (e2e)', () => {
     expect(guestRegistration.status).toBe(201);
     const hostBody = hostRegistration.body as AuthBody;
     const guestBody = guestRegistration.body as AuthBody;
+    const firstAppearance: VehicleAppearance = {
+      ...defaultAppearance,
+      modelId: 'gt',
+      number: 23,
+    };
+    const raceAppearance: VehicleAppearance = {
+      ...firstAppearance,
+      modelId: 'prototype',
+      livery: 'stripe',
+    };
+    await request(app.getHttpServer())
+      .patch('/api/users/me/appearance')
+      .set('Authorization', 'Bearer ' + hostBody.accessToken)
+      .send(firstAppearance)
+      .expect(200);
     const [hostRun, guestRun] = await Promise.all([
       prisma.trainingRun.create({
         data: {
@@ -672,11 +775,21 @@ describe('AppController (e2e)', () => {
         ),
       );
 
-      const createdRoom = new Promise<{ code: string }>((resolve) => {
+      const createdRoom = new Promise<{
+        code: string;
+        players: Array<{ appearance: VehicleAppearance }>;
+      }>((resolve) => {
         host.once('room:state', resolve);
       });
       host.emit('room:create', { maxPlayers: 2 });
-      const { code } = await createdRoom;
+      const created = await createdRoom;
+      const { code } = created;
+      expect(created.players[0].appearance).toEqual(firstAppearance);
+      await request(app.getHttpServer())
+        .patch('/api/users/me/appearance')
+        .set('Authorization', 'Bearer ' + hostBody.accessToken)
+        .send(raceAppearance)
+        .expect(200);
 
       const joinedRoom = new Promise<void>((resolve) => {
         guest.once('room:state', () => resolve());
@@ -738,14 +851,24 @@ describe('AppController (e2e)', () => {
       const movingSnapshot = new Promise<{
         status: string;
         startAt: number;
-        players: Array<{ speed: number; z: number }>;
+        players: Array<{
+          userId: string;
+          speed: number;
+          z: number;
+          appearance: VehicleAppearance;
+        }>;
       }>((resolve) => {
         host.on(
           'race:snapshot',
           (snapshot: {
             status: string;
             startAt: number;
-            players: Array<{ speed: number; z: number }>;
+            players: Array<{
+              userId: string;
+              speed: number;
+              z: number;
+              appearance: VehicleAppearance;
+            }>;
           }) => {
             if (
               snapshot.status === 'RACING' &&
@@ -758,6 +881,24 @@ describe('AppController (e2e)', () => {
       });
       const snapshot = await movingSnapshot;
       expect(snapshot.players.every((player) => player.z < 13)).toBe(true);
+      expect(
+        snapshot.players.find((p) => p.userId === hostBody.user.id)?.appearance,
+      ).toEqual(raceAppearance);
+      expect(
+        snapshot.players.find((p) => p.userId === guestBody.user.id)
+          ?.appearance,
+      ).toEqual(defaultAppearance);
+      await request(app.getHttpServer())
+        .patch('/api/users/me/appearance')
+        .set('Authorization', 'Bearer ' + hostBody.accessToken)
+        .send(firstAppearance)
+        .expect(200);
+      const frozen = await new Promise<{
+        players: Array<{ userId: string; appearance: VehicleAppearance }>;
+      }>((resolve) => host.once('race:snapshot', resolve));
+      expect(
+        frozen.players.find((p) => p.userId === hostBody.user.id)?.appearance,
+      ).toEqual(raceAppearance);
       const denied = new Promise<{ code: string }>((resolve) =>
         guest.once('server:error', resolve),
       );

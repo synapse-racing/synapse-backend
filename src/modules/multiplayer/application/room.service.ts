@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import {
+  defaultAppearance,
+  type VehicleAppearance,
+} from '../../garage/domain/vehicle-appearance';
 import { randomBytes } from 'node:crypto';
 import { RaceSimulation } from '../domain/race.simulation';
 import type { NeatGenome } from '../domain/neat-controller';
@@ -53,6 +57,7 @@ export class RoomService {
     user: { id: string; username: string },
     socketId: string,
     maxPlayers: number,
+    appearance: VehicleAppearance = defaultAppearance,
   ): PublicRoomState {
     this.ensureAvailable(user.id);
     if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 64) {
@@ -64,6 +69,7 @@ export class RoomService {
 
     const code = this.createCode();
     const player: RoomPlayer = {
+      appearance: { ...appearance },
       userId: user.id,
       username: user.username,
       socketId,
@@ -89,6 +95,7 @@ export class RoomService {
     codeInput: string,
     user: { id: string; username: string },
     socketId: string,
+    appearance: VehicleAppearance = defaultAppearance,
   ): PublicRoomState {
     this.ensureAvailable(user.id);
     const room = this.rooms.get(codeInput.trim().toUpperCase());
@@ -101,6 +108,7 @@ export class RoomService {
     }
 
     const player: RoomPlayer = {
+      appearance: { ...appearance },
       userId: user.id,
       username: user.username,
       socketId,
@@ -190,6 +198,48 @@ export class RoomService {
     socketId: string,
     now = Date.now(),
   ): { state: PublicRoomState; startAt: number } {
+    const room = this.requireStartableRoom(socketId);
+    const players = [...room.players.values()];
+    room.race = new RaceSimulation(
+      players.map((candidate) => ({
+        userId: candidate.userId,
+        username: candidate.username,
+        genome: candidate.genome!,
+        appearance: candidate.appearance,
+      })),
+      now,
+      generateTrack(room.track),
+    );
+    room.status = 'COUNTDOWN';
+    return { state: this.publicState(room), startAt: room.race.startAt };
+  }
+
+  async startWithAppearances(
+    socketId: string,
+    load: (ids: string[]) => Promise<ReadonlyMap<string, VehicleAppearance>>,
+  ): Promise<{ state: PublicRoomState; startAt: number }> {
+    const room = this.requireStartableRoom(socketId);
+    const roster = [...room.players.values()];
+    const appearances = await load(roster.map((player) => player.userId));
+    const current = this.requireStartableRoom(socketId);
+    if (
+      current !== room ||
+      current.players.size !== roster.length ||
+      roster.some((player) => current.players.get(player.userId) !== player)
+    ) {
+      throw new RoomError(
+        'ROOM_CHANGED',
+        'La sala cambió mientras se preparaba la carrera',
+      );
+    }
+    for (const player of roster)
+      player.appearance = {
+        ...(appearances.get(player.userId) ?? defaultAppearance),
+      };
+    return this.start(socketId);
+  }
+
+  private requireStartableRoom(socketId: string): Room {
     const { room, player } = this.requireMembership(socketId);
     if (room.hostUserId !== player.userId) {
       throw new RoomError('HOST_REQUIRED', 'Only the host can start the race');
@@ -210,17 +260,7 @@ export class RoomService {
     if (players.some((candidate) => !candidate.genome)) {
       throw new RoomError('GENOME_REQUIRED', 'Every player needs a genome');
     }
-    room.race = new RaceSimulation(
-      players.map((candidate) => ({
-        userId: candidate.userId,
-        username: candidate.username,
-        genome: candidate.genome!,
-      })),
-      now,
-      generateTrack(room.track),
-    );
-    room.status = 'COUNTDOWN';
-    return { state: this.publicState(room), startAt: room.race.startAt };
+    return room;
   }
 
   setTimeScale(socketId: string, timeScale: number): PublicRoomState {
@@ -354,6 +394,7 @@ export class RoomService {
         username: player.username,
         ready: player.ready,
         genomeName: player.genomeName,
+        appearance: { ...player.appearance },
       })),
     };
   }
