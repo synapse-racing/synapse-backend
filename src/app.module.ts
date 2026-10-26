@@ -10,6 +10,7 @@ import { DatabaseModule } from './infrastructure/database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { TrainingModule } from './modules/training/training.module';
 import { MultiplayerModule } from './modules/multiplayer/multiplayer.module';
+import { GarageModule } from './modules/garage/garage.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { MultiplayerModule } from './modules/multiplayer/multiplayer.module';
     AuthModule,
     TrainingModule,
     MultiplayerModule,
+    GarageModule,
   ],
   controllers: [AppController],
   providers: [

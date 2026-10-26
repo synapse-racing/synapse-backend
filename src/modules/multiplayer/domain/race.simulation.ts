@@ -5,6 +5,10 @@ import {
   RaceSnapshot,
   RoomStatus,
 } from './multiplayer.types';
+import {
+  defaultAppearance,
+  type VehicleAppearance,
+} from '../../garage/domain/vehicle-appearance';
 import { crossesCheckpoint } from './checkpoint-crossing';
 import { evaluateNeatGenome, type NeatGenome } from './neat-controller';
 import { generateTrack, prototypeTrackRecipe, type RaceTrack } from './track';
@@ -32,6 +36,7 @@ export class RaceSimulation {
       userId: string;
       username: string;
       genome?: NeatGenome;
+      appearance?: VehicleAppearance;
     }>,
     createdAt = Date.now(),
     private readonly track: RaceTrack = generateTrack(prototypeTrackRecipe),
@@ -40,6 +45,7 @@ export class RaceSimulation {
     competitors.forEach((competitor, index) => {
       this.players.set(competitor.userId, {
         ...competitor,
+        appearance: { ...(competitor.appearance ?? defaultAppearance) },
         x: track.spawn.x,
         z: track.spawn.z,
         yaw: track.spawn.yaw,
@@ -281,6 +287,7 @@ export class RaceSimulation {
     return [...this.players.values()]
       .sort((left, right) => left.rank - right.rank)
       .map((player) => ({
+        appearance: { ...(player.appearance ?? defaultAppearance) },
         userId: player.userId,
         username: player.username,
         x: player.x,

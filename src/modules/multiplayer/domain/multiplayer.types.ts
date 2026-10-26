@@ -1,3 +1,4 @@
+import type { VehicleAppearance } from '../../garage/domain/vehicle-appearance';
 import type { NeatGenome } from './neat-controller';
 import type { TrackRecipe } from './track';
 
@@ -11,6 +12,7 @@ export interface RaceInput {
 }
 
 export interface RacePlayerState {
+  appearance?: VehicleAppearance;
   userId: string;
   username: string;
   x: number;
@@ -40,6 +42,7 @@ export interface RaceResult {
 }
 
 export interface RoomPlayer {
+  appearance: VehicleAppearance;
   userId: string;
   username: string;
   socketId: string;
@@ -56,6 +59,9 @@ export interface PublicRoomState {
   maxPlayers: number;
   track: TrackRecipe;
   players: Array<
-    Pick<RoomPlayer, 'userId' | 'username' | 'ready' | 'genomeName'>
+    Pick<
+      RoomPlayer,
+      'userId' | 'username' | 'ready' | 'genomeName' | 'appearance'
+    >
   >;
 }

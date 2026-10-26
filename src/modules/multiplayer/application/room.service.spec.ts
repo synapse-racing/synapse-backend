@@ -1,4 +1,8 @@
 import { RoomError, RoomService, type RoomTickUpdate } from './room.service';
+import {
+  defaultAppearance,
+  type VehicleAppearance,
+} from '../../garage/domain/vehicle-appearance';
 import type { NeatGenome } from '../domain/neat-controller';
 
 const multiplayerTrack = { version: 'curved-loop-v1' as const, seed: 99 };
@@ -144,12 +148,14 @@ describe('race rematches', () => {
           username: 'Host',
           ready: false,
           genomeName: 'Host AI',
+          appearance: { ...defaultAppearance },
         },
         {
           userId: 'guest',
           username: 'Guest',
           ready: false,
           genomeName: 'Guest AI',
+          appearance: { ...defaultAppearance },
         },
       ]);
       expect(service.tick(now + 61000)).toEqual([]);
@@ -304,5 +310,111 @@ describe('host car controls', () => {
         .tick(startAt + 50)[0]
         .snapshot.players.find((p) => p.userId === 'guest2')?.eliminationReason,
     ).toBe('HOST');
+  });
+});
+
+describe('race appearance snapshots', () => {
+  function readyRoom() {
+    const service = new RoomService();
+    const created = service.create(
+      { id: 'host', username: 'Host' },
+      'host-socket',
+      2,
+    );
+    service.join(
+      created.code,
+      { id: 'guest', username: 'Guest' },
+      'guest-socket',
+    );
+    for (const socket of ['host-socket', 'guest-socket']) {
+      service.selectGenome(socket, genome, 'Pilot');
+      service.setReady(socket, true);
+    }
+    return { service, code: created.code };
+  }
+
+  it('refreshes equipped looks for each start and freezes copies during a race', async () => {
+    const { service } = readyRoom();
+    const appearance: VehicleAppearance = {
+      ...defaultAppearance,
+      modelId: 'gt',
+      number: 23,
+    };
+    const appearances = new Map([
+      ['host', appearance],
+      ['guest', { ...defaultAppearance }],
+    ]);
+    const load = jest.fn().mockResolvedValue(appearances);
+    const start = await service.startWithAppearances('host-socket', load);
+    expect(load).toHaveBeenCalledWith(['host', 'guest']);
+    expect(
+      start.state.players.find((p) => p.userId === 'host')?.appearance,
+    ).toEqual(appearance);
+    appearance.modelId = 'prototype';
+    start.state.players[0].appearance.primaryColor = '#000000';
+    const snapshot = service.tick(start.startAt)[0].snapshot;
+    expect(
+      snapshot.players.find((p) => p.userId === 'host')?.appearance,
+    ).toMatchObject({
+      modelId: 'gt',
+      primaryColor: defaultAppearance.primaryColor,
+      number: 23,
+    });
+    snapshot.players[0].appearance!.number = 99;
+    expect(
+      service.tick(start.startAt + 50)[0].snapshot.players[0].appearance
+        ?.number,
+    ).toBe(23);
+    service.eliminateCar('host-socket', 'guest', start.startAt);
+    service.eliminateCar('host-socket', 'host', start.startAt);
+    service.tick(start.startAt + 100);
+    service.setReady('host-socket', true);
+    service.setReady('guest-socket', true);
+    const next = await service.startWithAppearances('host-socket', load);
+    expect(
+      next.state.players.find((p) => p.userId === 'host')?.appearance.modelId,
+    ).toBe('prototype');
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a changed roster and a second start while appearance reads are pending', async () => {
+    const { service, code } = readyRoom();
+    let finish!: (appearances: ReadonlyMap<string, VehicleAppearance>) => void;
+    const pending = service.startWithAppearances(
+      'host-socket',
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    service.leave('guest-socket');
+    service.join(
+      code,
+      { id: 'guest', username: 'Guest' },
+      'replacement-socket',
+    );
+    service.selectGenome('replacement-socket', genome, 'Pilot');
+    service.setReady('replacement-socket', true);
+    finish(new Map());
+    await expect(pending).rejects.toMatchObject({ code: 'ROOM_CHANGED' });
+    const attempts = await Promise.allSettled([
+      service.startWithAppearances('host-socket', () =>
+        Promise.resolve(new Map()),
+      ),
+      service.startWithAppearances('host-socket', () =>
+        Promise.resolve(new Map()),
+      ),
+    ]);
+    expect(attempts.filter((a) => a.status === 'fulfilled')).toHaveLength(1);
+    expect(attempts.filter((a) => a.status === 'rejected')).toHaveLength(1);
+  });
+
+  it('does not load appearance data for a non-host start', async () => {
+    const { service } = readyRoom();
+    const load = jest.fn();
+    await expect(
+      service.startWithAppearances('guest-socket', load),
+    ).rejects.toMatchObject({ code: 'HOST_REQUIRED' });
+    expect(load).not.toHaveBeenCalled();
   });
 });

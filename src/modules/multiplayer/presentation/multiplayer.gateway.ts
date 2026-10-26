@@ -162,24 +162,38 @@ export class MultiplayerGateway
   }
 
   @SubscribeMessage('room:create')
-  createRoom(
+  async createRoom(
     @ConnectedSocket() client: MultiplayerSocket,
     @MessageBody() input: CreateRoomDto,
-  ): void {
-    this.execute(client, (user) => {
-      const state = this.roomService.create(user, client.id, input.maxPlayers);
+  ): Promise<void> {
+    await this.executeAsync(client, async (user) => {
+      const { appearance } = await this.usersService.getAppearance(user.id);
+      if (!client.connected) return;
+      const state = this.roomService.create(
+        user,
+        client.id,
+        input.maxPlayers,
+        appearance,
+      );
       void client.join(this.roomName(state.code));
       this.server.to(this.roomName(state.code)).emit('room:state', state);
     });
   }
 
   @SubscribeMessage('room:join')
-  joinRoom(
+  async joinRoom(
     @ConnectedSocket() client: MultiplayerSocket,
     @MessageBody() input: JoinRoomDto,
-  ): void {
-    this.execute(client, (user) => {
-      const state = this.roomService.join(input.code, user, client.id);
+  ): Promise<void> {
+    await this.executeAsync(client, async (user) => {
+      const { appearance } = await this.usersService.getAppearance(user.id);
+      if (!client.connected) return;
+      const state = this.roomService.join(
+        input.code,
+        user,
+        client.id,
+        appearance,
+      );
       void client.join(this.roomName(state.code));
       this.server.to(this.roomName(state.code)).emit('room:state', state);
     });
@@ -275,9 +289,12 @@ export class MultiplayerGateway
   }
 
   @SubscribeMessage('race:start')
-  startRace(@ConnectedSocket() client: MultiplayerSocket): void {
-    this.execute(client, () => {
-      const result = this.roomService.start(client.id);
+  async startRace(@ConnectedSocket() client: MultiplayerSocket): Promise<void> {
+    await this.executeAsync(client, async () => {
+      const result = await this.roomService.startWithAppearances(
+        client.id,
+        (ids) => this.usersService.getAppearances(ids),
+      );
       const target = this.server.to(this.roomName(result.state.code));
       target.emit('room:state', result.state);
       target.emit('race:start', { startAt: result.startAt });
